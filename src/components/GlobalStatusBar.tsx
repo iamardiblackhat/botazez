@@ -129,7 +129,7 @@ export default function GlobalStatusBar() {
           onMouseEnter={() => setHoveredQuake(quake)}
           onMouseLeave={() => setHoveredQuake(null)}
         >
-          <span className="text-[#FF9500] text-[10px]">🌋</span>
+          <span className="text-[#FF9500] text-[12px]">🌋</span>
           <span className="text-[#FF9500] font-bold tracking-wider">M{quake.magnitude.toFixed(1)}</span>
           <span className="text-[var(--text-muted)] truncate max-w-[150px]">{quake.place}</span>
         </span>
@@ -151,7 +151,7 @@ export default function GlobalStatusBar() {
       transition={{ delay: 4, duration: 0.8 }}
       className="hidden md:block absolute bottom-0 left-0 right-0 z-[198] pointer-events-none"
     >
-      <div className="h-[22px] overflow-hidden bg-black/90 border-t border-[var(--cyan-primary)]/40 flex items-center text-[8px] font-mono tracking-wider backdrop-blur-md relative" style={{ boxShadow: '0 -4px 20px rgba(0, 229, 255, 0.1)' }}>
+      <div className="h-[22px] overflow-hidden bg-black/90 border-t border-[var(--cyan-primary)]/40 flex items-center text-[11px] font-mono tracking-wider backdrop-blur-md relative" style={{ boxShadow: '0 -4px 20px rgba(0, 229, 255, 0.1)' }}>
         {/* Animated glitch line overlay */}
         <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[var(--cyan-primary)] to-transparent opacity-50" style={{ animation: 'hud-scanline 3s linear infinite' }} />
         
@@ -175,16 +175,16 @@ export default function GlobalStatusBar() {
       {/* Hover tooltips */}
       {hoveredQuake && (
         <div className="absolute bottom-[28px] left-1/2 -translate-x-1/2 z-[300] pointer-events-none">
-          <div className="glass-panel px-4 py-3 text-[10px] font-mono whitespace-nowrap" style={{ borderColor: '#FF950040' }}>
+          <div className="glass-panel px-4 py-3 text-[12px] font-mono whitespace-nowrap" style={{ borderColor: '#FF950040' }}>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[12px] text-[#FF9500]">🌋</span>
               <span className="font-bold text-[#FF9500]">Magnitude {hoveredQuake.magnitude.toFixed(1)}</span>
-              <span className="text-[var(--text-muted)] text-[9px] bg-black/40 px-1.5 py-0.5 rounded">USGS</span>
+              <span className="text-[var(--text-muted)] text-[12px] bg-black/40 px-1.5 py-0.5 rounded">USGS</span>
             </div>
             <div className="text-[11px] text-[var(--text-primary)] font-bold mb-2">
               {hoveredQuake.place}
             </div>
-            <div className="flex flex-col gap-1 text-[9px]">
+            <div className="flex flex-col gap-1 text-[12px]">
               <div className="text-[var(--text-secondary)]"><span className="opacity-50">Depth:</span> {hoveredQuake.depth} km</div>
               <div className="text-[var(--text-secondary)] mt-1"><span className="opacity-50">Time:</span> {new Date(hoveredQuake.time).toLocaleString()}</div>
             </div>

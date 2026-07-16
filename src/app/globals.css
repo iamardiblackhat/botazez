@@ -10,12 +10,12 @@
   --gold-rgb: 212, 175, 55;
   --cyan-rgb: 0, 229, 255;
   /* ── Core Palette ── */
-  --bg-void: #04040A;
-  --bg-primary: #06060C;
-  --bg-secondary: #0C0E1A;
-  --bg-tertiary: #121628;
-  --bg-panel: rgba(8, 10, 20, 0.88);
-  --bg-panel-solid: #0C0E1A;
+  --bg-void: #0A0F1E;
+  --bg-primary: #0E1526;
+  --bg-secondary: #18213B;
+  --bg-tertiary: #212D4C;
+  --bg-panel: rgba(23, 31, 55, 0.84);
+  --bg-panel-solid: #18213B;
 
   /* ── Gold Accent (Eye of Horus) ── */
   --gold-primary: #D4AF37;
@@ -39,16 +39,16 @@
   --accent-nuclear: #76FF03;
 
   /* ── Borders ── */
-  --border-primary: rgba(var(--gold-rgb), 0.15);
-  --border-secondary: rgba(var(--gold-rgb), 0.08);
-  --border-active: rgba(var(--gold-rgb), 0.4);
+  --border-primary: rgba(var(--gold-rgb), 0.20);
+  --border-secondary: rgba(var(--gold-rgb), 0.11);
+  --border-active: rgba(var(--gold-rgb), 0.5);
   --border-cyan: rgba(var(--cyan-rgb), 0.2);
 
   /* ── Text ── */
-  --text-primary: #E8E6E0;
-  --text-secondary: #9B978E;
-  --text-muted: #5C5A54;
-  --text-heading: #F5F0E0;
+  --text-primary: #F3F2EC;
+  --text-secondary: #CAC6BB;
+  --text-muted: #949081;
+  --text-heading: #FCF8EC;
   --text-gold: #D4AF37;
   --text-cyan: #00E5FF;
 
@@ -157,13 +157,13 @@ html, body {
   border-radius: 14px;
   box-shadow:
     0 4px 30px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(var(--gold-rgb), 0.06) inset,
+    0 1px 0 rgba(var(--gold-rgb), 0.10) inset,
     0 -1px 0 rgba(0, 0, 0, 0.3) inset;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-panel:hover {
-  border-color: rgba(var(--gold-rgb), 0.22);
+  border-color: rgba(var(--gold-rgb), 0.30);
 }
 
 .glass-panel-sm {
@@ -199,7 +199,7 @@ html, body {
 
 .hud-label {
   font-family: var(--font-hud);
-  font-size: 7px;
+  font-size: 9px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -207,7 +207,7 @@ html, body {
 
 .hud-value {
   font-family: var(--font-hud);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--gold-primary);
   font-variant-numeric: tabular-nums;
@@ -356,7 +356,7 @@ html, body {
 .mobile-nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 5px 6px; border-radius: 8px;
-  font-family: var(--font-hud); font-size: 6px; letter-spacing: 0.08em;
+  font-family: var(--font-hud); font-size: 8px; letter-spacing: 0.08em;
   color: var(--text-muted); background: transparent;
   border: none; cursor: pointer; transition: all 0.2s ease;
   text-transform: uppercase;
@@ -503,7 +503,7 @@ html, body {
   border-radius: 14px;
   box-shadow:
     0 4px 30px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(var(--gold-rgb), 0.06) inset,
+    0 1px 0 rgba(var(--gold-rgb), 0.10) inset,
     0 -1px 0 rgba(0, 0, 0, 0.3) inset;
   transition:
     transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -2247,3 +2247,64 @@ html, body {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   BOTAZEZ — VISUAL REFINEMENTS (contrast, active states, micro-motion)
+   Additive polish only — no layout, structure, or behavior changes.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Interactive glass chips/buttons — gentle lift + glow on hover */
+button.glass-panel,
+a.glass-panel {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease,
+              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease;
+}
+button.glass-panel:hover,
+a.glass-panel:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(var(--gold-rgb), 0.14);
+}
+button.glass-panel:active,
+a.glass-panel:active { transform: translateY(0); }
+
+/* Keyboard accessibility — clear focus ring that matches the palette */
+:where(button, a, [role="button"], input, select, textarea):focus-visible {
+  outline: 1px solid rgba(var(--gold-rgb), 0.65);
+  outline-offset: 2px;
+}
+
+/* Stronger, clearer active toggle state */
+.layer-toggle.active {
+  box-shadow: 0 0 0 1px rgba(var(--gold-rgb), 0.35), 0 0 10px rgba(var(--gold-rgb), 0.25);
+}
+
+/* Premium depth for the primary glass surfaces */
+.osiris-glow {
+  box-shadow:
+    0 0 24px rgba(var(--gold-rgb), 0.14),
+    0 0 70px rgba(var(--gold-rgb), 0.06),
+    0 8px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* ARDI panel launcher — brand-accent micro-interaction */
+.ardi-chip:hover {
+  border-color: rgba(20, 241, 149, 0.7) !important;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(20, 241, 149, 0.28) !important;
+}
+.ardi-cap:hover {
+  border-color: rgba(20, 241, 149, 0.32) !important;
+  background: rgba(20, 241, 149, 0.05) !important;
+}
+
+/* Sharper HUD values for at-a-glance reading */
+.hud-value { text-shadow: 0 0 10px rgba(var(--gold-rgb), 0.18); }
+
+/* Honor reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  button.glass-panel:hover,
+  a.glass-panel:hover { transform: none; }
+}
+
