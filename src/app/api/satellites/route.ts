@@ -373,6 +373,11 @@ export async function GET() {
         color: classification.color,
         category,
         noradId: sat.line1.substring(2, 7).trim(),
+        // Raw TLE orbital elements — enables real-time client-side orbit
+        // propagation (via satellite.js) so satellites glide along their
+        // true orbits instead of jumping only on server refresh.
+        tle1: sat.line1,
+        tle2: sat.line2,
       });
     }
 
