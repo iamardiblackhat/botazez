@@ -10,7 +10,13 @@
   "categories": ["security", "intelligence", "analytics", "news"],
   "icons": [
     {
-      "src": "/android-chrome-512x512.png",
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/osiris-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

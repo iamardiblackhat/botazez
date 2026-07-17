@@ -4,14 +4,14 @@
  *  POST /api/ai/overview   body: { mode: 'alerts' | 'markets', payload }
  *
  *  Generates a punchy intelligence read-out for the Alerts or Markets
- *  panel. Uses Groq when GROQ_API_KEY is configured, otherwise
+ *  panel. Uses Gemini when GEMINI_API_KEY_* is configured, otherwise
  *  falls back to a built-in heuristic analyst so the button ALWAYS
  *  works — no key required. Anyone can click it.
  * ═══════════════════════════════════════════════════════════════
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createGroqClient, rotateApiKey } from '@/lib/ai-engine';
+import { createGeminiClient, rotateApiKey } from '@/lib/ai-engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +19,10 @@ type Mode = 'alerts' | 'markets';
 
 function getEnvApiKeys(): string[] {
   const keys: string[] = [];
-  const groqKey = process.env.GROQ_API_KEY;
-  if (groqKey && groqKey.trim().length > 0) keys.push(groqKey.trim());
+  for (let i = 1; i <= 8; i++) {
+    const key = process.env[`GEMINI_API_KEY_${i}`];
+    if (key && key.trim().length > 0) keys.push(key.trim());
+  }
   return keys;
 }
 
@@ -159,24 +161,20 @@ function heuristicOverview(mode: Mode, digest: Digest): string {
   return `${digest.summaryLine}\n\n${bullets}`;
 }
 
-async function groqOverview(mode: Mode, digest: Digest, keys: string[]): Promise<string | null> {
+async function geminiOverview(mode: Mode, digest: Digest, keys: string[]): Promise<string | null> {
   try {
-    const client = createGroqClient(rotateApiKey(keys));
-    const prompt = `MODE: ${mode.toUpperCase()}\nBOTTOM LINE: ${digest.summaryLine}\nFACTS:\n${digest.facts.map(f => `- ${f}`).join('\n')}\n\nWrite the read-out now.`;
-    const result = await client.chat.completions.create({
-      model: 'mixtral-8x7b-32768',
-      messages: [
-        { role: 'system', content: 'You are OSIRIS, a terse intelligence analyst. Given structured facts, write a sharp 2-4 sentence situational read-out. No preamble, no markdown headers, no hedging. Lead with the bottom line.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 300,
+    const client = createGeminiClient(rotateApiKey(keys));
+    const model = client.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      systemInstruction:
+        'You are OSIRIS, a terse intelligence analyst. Given structured facts, write a sharp 2-4 sentence situational read-out. No preamble, no markdown headers, no hedging. Lead with the bottom line.',
     });
-    const message = result.choices[0]?.message;
-    const text = (message?.content || '').trim();
+    const prompt = `MODE: ${mode.toUpperCase()}\nBOTTOM LINE: ${digest.summaryLine}\nFACTS:\n${digest.facts.map(f => `- ${f}`).join('\n')}\n\nWrite the read-out now.`;
+    const result = await model.generateContent(prompt);
+    const text = result.response.text().trim();
     return text || null;
   } catch (e) {
-    console.warn('[OSIRIS] Groq overview failed, using heuristic:', e);
+    console.warn('[OSIRIS] Gemini overview failed, using heuristic:', e);
     return null;
   }
 }
@@ -196,11 +194,11 @@ export async function POST(request: NextRequest) {
 
   const keys = getEnvApiKeys();
   let overview: string | null = null;
-  let generatedBy: 'groq' | 'analyst' = 'analyst';
+  let generatedBy: 'gemini' | 'analyst' = 'analyst';
 
   if (keys.length > 0) {
-    overview = await groqOverview(mode, digest, keys);
-    if (overview) generatedBy = 'groq';
+    overview = await geminiOverview(mode, digest, keys);
+    if (overview) generatedBy = 'gemini';
   }
   if (!overview) overview = heuristicOverview(mode, digest);
 

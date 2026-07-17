@@ -1,7 +1,0 @@
-{
-  "enabledMcpjsonServers": [
-    "firecrawl",
-    "gemini-api-docs-mcp",
-    "next-devtools"
-  ]
-}
