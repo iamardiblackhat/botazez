@@ -18,6 +18,7 @@ import GlobalStatusBar from '@/components/GlobalStatusBar';
 import LiveAlerts from '@/components/LiveAlerts';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
+const SpaceCanvas = dynamic(() => import('@/components/SpaceCanvas'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
 const CameraViewer = dynamic(() => import('@/components/CameraViewer'));
 const OsintPanel = dynamic(() => import('@/components/OsintPanel'));
@@ -730,6 +731,9 @@ export default function Dashboard() {
           theme={osirisTheme}
         />
       </ErrorBoundary>
+
+      {/* Isolated cosmic background overlay — decorative only, no data hooks */}
+      <SpaceCanvas />
 
 
       {/* ── MAP VIEW CONTROLS (3D/2D + SATELLITE TOGGLE) ── */}

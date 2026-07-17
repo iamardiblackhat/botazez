@@ -1611,12 +1611,18 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         map.easeTo({ pitch: 20, duration: 1200 });
         try {
           (map as any).setSky({
-            'sky-color': '#04040A',
-            'sky-horizon-blend': 0.5,
-            'horizon-color': '#0a0a1a',
-            'horizon-fog-blend': 0.3,
-            'fog-color': '#04040A',
+            // Deep space beyond the atmosphere
+            'sky-color': '#05070f',
+            'sky-horizon-blend': 0.6,
+            // Glowing blue atmospheric scattering rim (Fresnel-like edge)
+            'horizon-color': '#2f6bff',
+            'horizon-fog-blend': 0.5,
+            'fog-color': '#05070f',
             'fog-ground-blend': 0.9,
+            // Visible atmosphere on the globe — strong from orbit, eases off
+            // as you zoom into countries so terrain reads clean. Interpolated
+            // per MapLibre guidance for globe projection. Visual-only.
+            'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 3, 0.55, 6, 0.2],
           });
         } catch (e) { console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e); }
       } else {
