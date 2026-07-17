@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import * as satellite from 'satellite.js';
 
 interface OsirisMapProps {
   data: any;
@@ -42,12 +43,56 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
+// Propagate one satellite's orbital record to a lon/lat at the given time and
+// return a GeoJSON point feature. Returns null if the orbit can't be resolved.
+function propagateSatFeature(
+  r: { satrec: any; color: string; name: string; mission: string; noradId: string; category: string; alt: number },
+  when: Date,
+  gmst: number
+): any | null {
+  try {
+    const pv = satellite.propagate(r.satrec, when);
+    const posEci = pv && (pv as any).position;
+    if (!posEci) return null;
+    const geo = satellite.eciToGeodetic(posEci as any, gmst);
+    let lng = satellite.degreesLong(geo.longitude);
+    const lat = satellite.degreesLat(geo.latitude);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    // Normalise longitude to [-180, 180]
+    lng = ((lng + 540) % 360) - 180;
+    const altKm = Math.round(geo.height);
+    return {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: { name: r.name, color: r.color, mission: r.mission, alt: altKm > 0 ? altKm : r.alt, noradId: r.noradId, category: r.category },
+    };
+  } catch {
+    return null;
+  }
+}
+
 function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core' }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const prevStyleRef = useRef(mapStyle);
+
+  // ── Live satellite orbit animation ──
+  // satSpeed is a time-multiplier: 1× = true real-time, higher = orbits sweep faster.
+  const [satSpeed, setSatSpeed] = useState(60);
+  const [satPlaying, setSatPlaying] = useState(true);
+  const [satActive, setSatActive] = useState(false); // is any satellite layer on?
+  const satSpeedRef = useRef(satSpeed);
+  const satPlayingRef = useRef(satPlaying);
+  useEffect(() => { satSpeedRef.current = satSpeed; }, [satSpeed]);
+  useEffect(() => { satPlayingRef.current = satPlaying; }, [satPlaying]);
+  // Active satellite selection with precomputed SGP4 records (satrecs).
+  const satRecordsRef = useRef<Array<{ satrec: any; color: string; name: string; mission: string; noradId: string; category: string; alt: number }>>([]);
+  // Simulated clock: wall-clock offset (ms) that advances by dt × speed each frame.
+  const simOffsetRef = useRef(0);
+  const lastFrameRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
 
   // Create aircraft icon on canvas (for WebGL symbol layer)
   const createIcon = useCallback((map: maplibregl.Map, id: string, color: string, size: number) => {
@@ -1120,33 +1165,115 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setGeo('earthquakes', activeLayers.earthquakes && data.earthquakes ? data.earthquakes.map((eq: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [eq.lng, eq.lat] }, properties: { magnitude: eq.magnitude, place: eq.place } })) : []);
   }, [mapReady, data.earthquakes, activeLayers.earthquakes, setGeo]);
 
+  // ── Satellite selection → build live SGP4 records for the active set ──
+  // This effect decides WHICH satellites are shown (all vs. filtered by
+  // category) and precomputes a satellite.js satrec for each so the animation
+  // loop can propagate their true orbital position every frame.
   useEffect(() => {
     if (!mapReady) return;
     const sats = data.satellites || [];
     const al = activeLayers as any;
-    
-    // If 'All Satellites' is on, show everything
+
+    let selected: any[] = [];
     if (al.satellites) {
-      setGeo('satellites', sats.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: s.color, mission: s.mission, alt: s.alt, noradId: s.noradId, category: s.category } })));
-      return;
+      selected = sats;
+    } else {
+      const enabledCategories: string[] = [];
+      if (al.sat_comms) enabledCategories.push('comms');
+      if (al.sat_military) enabledCategories.push('military');
+      if (al.sat_navigation) enabledCategories.push('navigation');
+      if (al.sat_earth) enabledCategories.push('earth_obs');
+      if (al.sat_science) enabledCategories.push('science');
+      if (enabledCategories.length > 0) {
+        selected = sats.filter((s: any) => enabledCategories.includes(s.category));
+      }
     }
-    
-    // Otherwise filter by enabled sub-layers
-    const enabledCategories: string[] = [];
-    if (al.sat_comms) enabledCategories.push('comms');
-    if (al.sat_military) enabledCategories.push('military');
-    if (al.sat_navigation) enabledCategories.push('navigation');
-    if (al.sat_earth) enabledCategories.push('earth_obs');
-    if (al.sat_science) enabledCategories.push('science');
-    
-    if (enabledCategories.length === 0) {
+
+    const anyOn = selected.length > 0;
+    setSatActive(anyOn);
+
+    if (!anyOn) {
+      satRecordsRef.current = [];
       setGeo('satellites', []);
       return;
     }
-    
-    const filtered = sats.filter((s: any) => enabledCategories.includes(s.category));
-    setGeo('satellites', filtered.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: s.color, mission: s.mission, alt: s.alt, noradId: s.noradId, category: s.category } })));
+
+    // Build SGP4 records. Satellites that arrive with TLE lines get true
+    // orbital propagation; any without fall back to their static position.
+    const records: Array<{ satrec: any; color: string; name: string; mission: string; noradId: string; category: string; alt: number }> = [];
+    const staticFeatures: any[] = [];
+    for (const s of selected) {
+      if (s.tle1 && s.tle2) {
+        try {
+          const satrec = satellite.twoline2satrec(s.tle1, s.tle2);
+          if (satrec && !satrec.error) {
+            records.push({ satrec, color: s.color, name: s.name, mission: s.mission, noradId: s.noradId, category: s.category, alt: s.alt });
+            continue;
+          }
+        } catch { /* fall through to static */ }
+      }
+      staticFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: s.color, mission: s.mission, alt: s.alt, noradId: s.noradId, category: s.category } });
+    }
+    satRecordsRef.current = records;
+
+    // Immediate first paint (also covers the paused / no-TLE case) so dots
+    // appear instantly without waiting for the first animation frame.
+    const now = new Date();
+    const gmstNow = satellite.gstime(now);
+    const feats = staticFeatures.slice();
+    for (const r of records) {
+      const f = propagateSatFeature(r, now, gmstNow);
+      if (f) feats.push(f);
+    }
+    setGeo('satellites', feats);
   }, [mapReady, data.satellites, activeLayers.satellites, (activeLayers as any).sat_comms, (activeLayers as any).sat_military, (activeLayers as any).sat_navigation, (activeLayers as any).sat_earth, (activeLayers as any).sat_science, setGeo]);
+
+  // ── Animation loop: advance a simulated clock and re-propagate orbits ──
+  useEffect(() => {
+    if (!mapReady || !satActive) {
+      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      return;
+    }
+
+    let lastRender = 0;
+    const tick = (ts: number) => {
+      rafRef.current = requestAnimationFrame(tick);
+      if (lastFrameRef.current === 0) lastFrameRef.current = ts;
+      const dt = ts - lastFrameRef.current; // real ms since last frame
+      lastFrameRef.current = ts;
+
+      // While paused, nothing moves — leave the last positions on screen and
+      // skip all recomputation.
+      if (!satPlayingRef.current) return;
+
+      // Advance the simulated clock.
+      simOffsetRef.current += dt * satSpeedRef.current;
+
+      const records = satRecordsRef.current;
+      if (records.length === 0) return;
+
+      // Adaptive throttle: keep the update cadence light when many satellites
+      // are active so mobile stays smooth (more sats → slightly slower redraw).
+      const updateMs = Math.min(500, Math.max(70, records.length / 20));
+      if (ts - lastRender < updateMs) return;
+      lastRender = ts;
+
+      const simDate = new Date(Date.now() + simOffsetRef.current);
+      const gmstNow = satellite.gstime(simDate);
+      const feats: any[] = [];
+      for (const r of records) {
+        const f = propagateSatFeature(r, simDate, gmstNow);
+        if (f) feats.push(f);
+      }
+      setGeo('satellites', feats);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      lastFrameRef.current = 0;
+    };
+  }, [mapReady, satActive, setGeo]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -1484,12 +1611,18 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         map.easeTo({ pitch: 20, duration: 1200 });
         try {
           (map as any).setSky({
-            'sky-color': '#04040A',
-            'sky-horizon-blend': 0.5,
-            'horizon-color': '#0a0a1a',
-            'horizon-fog-blend': 0.3,
-            'fog-color': '#04040A',
+            // Deep space beyond the atmosphere
+            'sky-color': '#05070f',
+            'sky-horizon-blend': 0.6,
+            // Glowing blue atmospheric scattering rim (Fresnel-like edge)
+            'horizon-color': '#2f6bff',
+            'horizon-fog-blend': 0.5,
+            'fog-color': '#05070f',
             'fog-ground-blend': 0.9,
+            // Visible atmosphere on the globe — strong from orbit, eases off
+            // as you zoom into countries so terrain reads clean. Interpolated
+            // per MapLibre guidance for globe projection. Visual-only.
+            'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 3, 0.55, 6, 0.2],
           });
         } catch (e) { console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e); }
       } else {
@@ -1597,7 +1730,101 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     }
   }, [mapReady, mapStyle]);
 
-  return <div ref={containerRef} className="absolute inset-0 w-full h-full" />;
+  const accent = theme === 'ghost' ? '#B388FF' : '#00E5FF';
+  const speedLabel = satSpeed >= 1 ? `${Math.round(satSpeed)}×` : `${satSpeed}×`;
+
+  return (
+    <>
+      <div ref={containerRef} className="absolute inset-0 w-full h-full" />
+
+      {/* ── Live orbit speed control — only while a satellite layer is on ── */}
+      {satActive && (
+        <div
+          className="absolute z-30 pointer-events-auto"
+          style={{
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bottom: 'max(env(safe-area-inset-bottom, 0px), 88px)',
+            width: 'min(340px, calc(100vw - 32px))',
+          }}
+        >
+          <div
+            style={{
+              background: 'rgba(8, 14, 22, 0.82)',
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+              border: `1px solid ${accent}44`,
+              borderRadius: 12,
+              padding: '10px 12px',
+              boxShadow: `0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px ${accent}18`,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setSatPlaying(p => !p)}
+                aria-label={satPlaying ? 'Pause orbits' : 'Play orbits'}
+                style={{
+                  flex: '0 0 auto', width: 34, height: 34, borderRadius: 8,
+                  border: `1px solid ${accent}66`, background: `${accent}1a`,
+                  color: accent, cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', fontSize: 14,
+                }}
+              >
+                {satPlaying ? '❚❚' : '▶'}
+              </button>
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+                  <span style={{ fontSize: 9, letterSpacing: '0.14em', color: `${accent}cc`, fontFamily: 'monospace', textTransform: 'uppercase' }}>
+                    Orbit Speed
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: accent, fontFamily: 'monospace' }}>
+                    {speedLabel}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={500}
+                  step={1}
+                  value={satSpeed}
+                  onChange={(e) => setSatSpeed(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: accent, cursor: 'pointer', height: 18 }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              {[
+                { label: 'Real', v: 1 },
+                { label: '60×', v: 60 },
+                { label: '150×', v: 150 },
+                { label: '500×', v: 500 },
+              ].map(preset => {
+                const on = Math.round(satSpeed) === preset.v;
+                return (
+                  <button
+                    key={preset.v}
+                    onClick={() => setSatSpeed(preset.v)}
+                    style={{
+                      flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 10,
+                      fontFamily: 'monospace', letterSpacing: '0.06em', cursor: 'pointer',
+                      border: `1px solid ${on ? accent : accent + '33'}`,
+                      background: on ? `${accent}22` : 'transparent',
+                      color: on ? accent : `${accent}99`,
+                      fontWeight: on ? 700 : 400,
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export default memo(OsirisMap);
