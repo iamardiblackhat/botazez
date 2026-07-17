@@ -2,13 +2,13 @@
  * ═══════════════════════════════════════════════════════════════
  *  OSIRIS — AI Intelligence Briefing Endpoint
  *  POST /api/ai/briefing
- *  Generates structured threat briefings via Gemini
+ *  Generates structured threat briefings via Groq
  * ═══════════════════════════════════════════════════════════════
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createGeminiClient,
+  createGroqClient,
   rotateApiKey,
   generateBriefing,
   type IntelligenceContext,
@@ -61,11 +61,9 @@ setInterval(() => {
 
 function getEnvApiKeys(): string[] {
   const keys: string[] = [];
-  for (let i = 1; i <= 8; i++) {
-    const key = process.env[`GEMINI_API_KEY_${i}`];
-    if (key && key.trim().length > 0) {
-      keys.push(key.trim());
-    }
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey && groqKey.trim().length > 0) {
+    keys.push(groqKey.trim());
   }
   return keys;
 }
@@ -119,7 +117,7 @@ export async function POST(
     );
   }
 
-  const userKey = request.headers.get('x-gemini-key')?.trim();
+  const userKey = request.headers.get('x-groq-key')?.trim();
   let apiKey: string;
 
   if (userKey && userKey.length > 0) {
@@ -130,7 +128,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            'No Gemini API key configured. Set GEMINI_API_KEY_1 in environment or provide a key via the settings panel.',
+            'No Groq API key configured. Set GROQ_API_KEY in environment or provide a key via the settings panel.',
           code: 'NO_API_KEY',
         },
         { status: 503 }
@@ -157,7 +155,7 @@ export async function POST(
   }
 
   try {
-    const client = createGeminiClient(apiKey);
+    const client = createGroqClient(apiKey);
     const briefing = await generateBriefing(client, body.context);
 
     return NextResponse.json(
@@ -172,32 +170,22 @@ export async function POST(
       }
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown Gemini API error';
+    const message = err instanceof Error ? err.message : 'Unknown Groq API error';
 
-    if (message.includes('API_KEY_INVALID') || message.includes('API key not valid')) {
+    if (message.includes('API_KEY_INVALID') || message.includes('API key not valid') || message.includes('401')) {
       return NextResponse.json(
-        { error: 'Invalid Gemini API key. Please check your configuration.', code: 'INVALID_KEY' },
+        { error: 'Invalid Groq API key. Please check your configuration.', code: 'INVALID_KEY' },
         { status: 401 }
       );
     }
 
-    if (message.includes('RESOURCE_EXHAUSTED') || message.includes('quota')) {
+    if (message.includes('RESOURCE_EXHAUSTED') || message.includes('quota') || message.includes('rate_limit')) {
       return NextResponse.json(
         {
-          error: 'Gemini API quota exhausted. Try again later or provide your own API key.',
+          error: 'Groq API quota exhausted. Try again later.',
           code: 'QUOTA_EXHAUSTED',
         },
         { status: 429 }
-      );
-    }
-
-    if (message.includes('SAFETY')) {
-      return NextResponse.json(
-        {
-          error: 'Response blocked by Gemini safety filters. Try again.',
-          code: 'SAFETY_BLOCKED',
-        },
-        { status: 422 }
       );
     }
 
