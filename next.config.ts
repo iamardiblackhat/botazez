@@ -1,13 +1,22 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
-  // 'standalone' is only needed for Docker self-hosting. Vercel does not need
-  // it and it can break Vercel builds — enable only when BUILD_STANDALONE=true.
   ...(process.env.BUILD_STANDALONE === 'true' ? { output: 'standalone' as const } : {}),
   serverExternalPackages: ['ws'],
   transpilePackages: ['react-map-gl', 'mapbox-gl', 'maplibre-gl'],
   typescript: {
     ignoreBuildErrors: true,
+  },
+  // Force the "@/..." path alias to resolve to /src for webpack builds.
+  // (tsconfig paths were not being picked up reliably; this guarantees it.)
+  webpack: (config) => {
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      '@': path.resolve(__dirname, 'src'),
+    };
+    return config;
   },
   images: {
     remotePatterns: [
