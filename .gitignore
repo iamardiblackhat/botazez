@@ -57,3 +57,5 @@ scanner_backend_backup.js
 # Security - Prevent accidental manual leaks
 *Manual*.md
 _to_delete/
+.vercel-config/
+
