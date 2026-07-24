@@ -71,6 +71,31 @@ const ALL_BODIES: PlanetDef[] = [...PLANETS, BLACK_HOLE];
 
 const SUN_RADIUS = 5.5;
 
+// Real astronomical facts, shown as a readout while a body is focused —
+// factual public data (temperature, atmosphere, moons, orbital figures),
+// not sourced imagery/text from any third-party site.
+interface PlanetFacts {
+  avgTemp: string;
+  atmosphere: string;
+  moons: string;
+  distanceFromSun: string;
+  dayLength: string;
+  yearLength: string;
+}
+
+const PLANET_FACTS: Record<PlanetKey, PlanetFacts> = {
+  mercury: { avgTemp: '-173°C to 427°C', atmosphere: 'None (trace exosphere)', moons: '0', distanceFromSun: '57.9M km (0.39 AU)', dayLength: '59 Earth days', yearLength: '88 Earth days' },
+  venus:   { avgTemp: '464°C — hottest planet', atmosphere: '96% CO₂, dense', moons: '0', distanceFromSun: '108.2M km (0.72 AU)', dayLength: '243 Earth days (retrograde)', yearLength: '225 Earth days' },
+  earth:   { avgTemp: '15°C', atmosphere: '78% N₂, 21% O₂', moons: '1', distanceFromSun: '149.6M km (1 AU)', dayLength: '24 hours', yearLength: '365.25 days' },
+  mars:    { avgTemp: '-63°C', atmosphere: '95% CO₂, thin', moons: '2 — Phobos, Deimos', distanceFromSun: '227.9M km (1.52 AU)', dayLength: '24.6 hours', yearLength: '687 Earth days' },
+  jupiter: { avgTemp: '-110°C (cloud tops)', atmosphere: '90% H₂, 10% He', moons: '95 confirmed', distanceFromSun: '778.5M km (5.2 AU)', dayLength: '9.9 hours', yearLength: '11.9 Earth years' },
+  saturn:  { avgTemp: '-140°C', atmosphere: '96% H₂, 3% He', moons: '146 confirmed', distanceFromSun: '1.434B km (9.5 AU)', dayLength: '10.7 hours', yearLength: '29.4 Earth years' },
+  uranus:  { avgTemp: '-195°C', atmosphere: 'H₂ / He / CH₄ (methane haze)', moons: '27', distanceFromSun: '2.871B km (19.2 AU)', dayLength: '17.2 hours (retrograde)', yearLength: '84 Earth years' },
+  neptune: { avgTemp: '-200°C', atmosphere: 'H₂ / He / CH₄', moons: '14', distanceFromSun: '4.495B km (30.1 AU)', dayLength: '16.1 hours', yearLength: '165 Earth years' },
+  pluto:   { avgTemp: '-225°C', atmosphere: 'Thin N₂ / CH₄ / CO (seasonal)', moons: '5 — Charon, Styx, Nix, Kerberos, Hydra', distanceFromSun: '5.906B km (39.5 AU)', dayLength: '6.4 Earth days', yearLength: '248 Earth years' },
+  blackhole: { avgTemp: 'N/A — no surface', atmosphere: 'None', moons: 'N/A', distanceFromSun: 'Deep space, well past Pluto', dayLength: 'N/A', yearLength: 'N/A' },
+};
+
 // Cheap, GPU-light accretion-disk look: a radial color ramp (white-hot inner
 // edge -> orange -> deep red -> fades to nothing) computed from local-space
 // radius, plus a faint rotating band pattern for a "flowing plasma" feel.
@@ -479,6 +504,34 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
           ← Back to Earth
         </button>
       )}
+
+      {/* Real facts readout — temperature, atmosphere, moons, orbital
+          figures for whichever body is currently focused. */}
+      {mode === 'focus' && focusedName && (() => {
+        const key = ALL_BODIES.find(p => p.name === focusedName)?.key;
+        const facts = key ? PLANET_FACTS[key] : null;
+        if (!facts) return null;
+        const isBH = key === 'blackhole';
+        return (
+          <div className="absolute bottom-4 left-4 font-mono text-white/80 pointer-events-none select-none bg-black/30 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-3 max-w-[280px]">
+            {isBH ? (
+              <div className="text-[12px] leading-relaxed text-white/60">
+                Illustrative deep-space body — event horizon + accretion disk
+                rendered for atmosphere, not a charted real-world object.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5 text-[12px]">
+                <div className="flex justify-between gap-4"><span className="text-white/40 uppercase tracking-wider text-[10px]">Avg. Temp</span><span>{facts.avgTemp}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-white/40 uppercase tracking-wider text-[10px]">Atmosphere</span><span className="text-right">{facts.atmosphere}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-white/40 uppercase tracking-wider text-[10px]">Moons</span><span className="text-right">{facts.moons}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-white/40 uppercase tracking-wider text-[10px]">Dist. from Sun</span><span className="text-right">{facts.distanceFromSun}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-white/40 uppercase tracking-wider text-[10px]">Day Length</span><span className="text-right">{facts.dayLength}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-white/40 uppercase tracking-wider text-[10px]">Year Length</span><span className="text-right">{facts.yearLength}</span></div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-[11px] uppercase tracking-wider text-white/30 pointer-events-none select-none">
         {mode === 'overview' ? 'Click a planet to zoom in · drag to look around' : 'Drag to spin · scroll out to return'}
