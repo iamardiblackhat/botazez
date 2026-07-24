@@ -1047,6 +1047,8 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         <div style="font-size:9px;color:#aaa;">Traffic: <span style="color:#fff;">${p.traffic}</span></div>
         <div style="font-size:9px;color:#aaa;">Risk: <span style="color:${riskCol};font-weight:bold;">${p.risk}</span></div>
       </div>`);
+      // Also offer the live water view for this chokepoint
+      onEntityClick?.({ type: 'maritime_chokepoint', name: p.name, traffic: p.traffic, risk: p.risk, lat: coords[1], lng: coords[0] });
     });
 
     // ── Live News (opens feed viewer) ──
@@ -1610,15 +1612,21 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       if (projection === 'globe') {
         map.easeTo({ pitch: 20, duration: 1200 });
         try {
+          // Altitude-driven sky: dark/space-like when viewing the whole globe
+          // from orbit (low zoom), transitioning to a genuinely lighter,
+          // natural atmosphere-blue as you descend toward ground level (high
+          // zoom) — real daytime sky is bright blue, not black. Color
+          // interpolation via MapLibre native zoom expressions; a full
+          // Rayleigh/Mie scattering shader layer is tracked separately.
           (map as any).setSky({
-            // Deep space beyond the atmosphere
-            'sky-color': '#05070f',
-            'sky-horizon-blend': 0.6,
-            // Glowing blue atmospheric scattering rim (Fresnel-like edge)
-            'horizon-color': '#2f6bff',
-            'horizon-fog-blend': 0.5,
-            'fog-color': '#05070f',
-            'fog-ground-blend': 0.9,
+            'sky-color': ['interpolate', ['linear'], ['zoom'], 0, '#05070f', 2, '#05070f', 5, '#1a3a5c', 8, '#4a90d9'],
+            'sky-horizon-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.6, 3, 0.5, 6, 0.35, 9, 0.25],
+            // Glowing blue atmospheric scattering rim (Fresnel-like edge),
+            // brightening as the camera nears the surface.
+            'horizon-color': ['interpolate', ['linear'], ['zoom'], 0, '#2f6bff', 5, '#5B9BD5', 8, '#B3D9FF'],
+            'horizon-fog-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.5, 5, 0.35, 9, 0.15],
+            'fog-color': ['interpolate', ['linear'], ['zoom'], 0, '#05070f', 5, '#2a4a6a', 8, '#8FC1EA'],
+            'fog-ground-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 6, 0.6, 9, 0.3],
             // Visible atmosphere on the globe — strong from orbit, eases off
             // as you zoom into countries so terrain reads clean. Interpolated
             // per MapLibre guidance for globe projection. Visual-only.

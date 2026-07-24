@@ -111,13 +111,13 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
               </div>
 
               {/* ── Collage band ── */}
-              <div className="relative flex items-end justify-center gap-0 px-4 pt-6 pb-2 select-none" style={{ minHeight: 300 }}>
+              <div className="relative flex items-end justify-center gap-0 px-4 pt-6 pb-2 select-none min-h-[150px] sm:min-h-[240px] md:min-h-[300px]">
                 <motion.div
                   initial={{ opacity: 0, x: 30, rotate: 4 }} animate={{ opacity: 1, x: 0, rotate: 3 }} transition={{ delay: 0.05, duration: 0.5 }}
-                  className="relative z-10 -mr-6 md:-mr-10 hidden sm:block"
+                  className="relative z-10 -mr-2.5 sm:-mr-6 md:-mr-10 block"
                   style={{ filter: 'drop-shadow(0 10px 26px rgba(0,229,255,0.22))' }}
                 >
-                  <ImgWithFallback src={IMAGES.guide} alt="ARDI — analyst" className="w-[140px] md:w-[210px] h-auto opacity-90" />
+                  <ImgWithFallback src={IMAGES.guide} alt="ARDI — analyst" className="w-[72px] sm:w-[140px] md:w-[210px] h-auto opacity-90" />
                 </motion.div>
 
                 <motion.div
@@ -125,15 +125,15 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
                   className="relative z-20"
                   style={{ filter: 'drop-shadow(0 18px 40px rgba(20,241,149,0.3))' }}
                 >
-                  <ImgWithFallback src={IMAGES.ops} alt="ARDI — cyber operative" className="w-[200px] md:w-[300px] h-auto" />
+                  <ImgWithFallback src={IMAGES.ops} alt="ARDI — cyber operative" className="w-[104px] sm:w-[200px] md:w-[300px] h-auto" />
                 </motion.div>
 
                 <motion.div
                   initial={{ opacity: 0, x: -30, rotate: -4 }} animate={{ opacity: 1, x: 0, rotate: -3 }} transition={{ delay: 0.05, duration: 0.5 }}
-                  className="relative z-10 -ml-6 md:-ml-10 hidden sm:block"
+                  className="relative z-10 -ml-2.5 sm:-ml-6 md:-ml-10 block"
                   style={{ filter: 'drop-shadow(0 10px 26px rgba(20,241,149,0.22))' }}
                 >
-                  <ImgWithFallback src={IMAGES.hero} alt="ARDI — operator" className="w-[140px] md:w-[210px] h-auto opacity-90" />
+                  <ImgWithFallback src={IMAGES.hero} alt="ARDI — operator" className="w-[72px] sm:w-[140px] md:w-[210px] h-auto opacity-90" />
                 </motion.div>
               </div>
 

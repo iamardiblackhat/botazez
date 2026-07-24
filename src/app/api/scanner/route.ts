@@ -29,6 +29,13 @@ const ALLOWED_SCANS: Record<string, { endpoint: string; timeout: number }> = {
   vuln:       { endpoint: '/scan/vuln',       timeout: 90000 },
 };
 
+// Scan types that actively probe the target (real nmap scans) rather than
+// just reading public info. These are NOT available to anonymous site
+// visitors — owner-only, via ADMIN_SCAN_KEY. If ADMIN_SCAN_KEY is unset,
+// these fail closed (blocked for everyone) rather than silently open.
+const RESTRICTED_SCANS = new Set(['quick', 'ssl', 'vuln']);
+const ADMIN_SCAN_KEY = process.env.ADMIN_SCAN_KEY || '';
+
 // REMOVED from public access: deep, ports, banner, traceroute
 // These are dangerous in an unauthenticated context:
 //   deep     → scans 65,535 ports (DDoS amplifier)
@@ -79,6 +86,19 @@ export async function GET(req: Request) {
       detail: `"${scanType}" is restricted. Available: ${Object.keys(ALLOWED_SCANS).join(', ')}`,
       available_scans: Object.keys(ALLOWED_SCANS),
     }, { status: 403 });
+  }
+
+  // 5b. Active-probe scans (real nmap scans against a third party) require
+  // the site owner's admin key. Public visitors never get these — only
+  // read-only lookups (whois/dns/headers/tech/subdomains/geoloc) are public.
+  if (RESTRICTED_SCANS.has(scanType)) {
+    const providedKey = req.headers.get('x-admin-key') || searchParams.get('adminKey');
+    if (!ADMIN_SCAN_KEY || providedKey !== ADMIN_SCAN_KEY) {
+      return NextResponse.json({
+        error: 'Owner authorization required',
+        detail: `"${scanType}" actively scans the target and is restricted to the site owner.`,
+      }, { status: 401 });
+    }
   }
 
   // 6. Execute scan with tight timeout

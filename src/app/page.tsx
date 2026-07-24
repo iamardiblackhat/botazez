@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair } from 'lucide-react';
+import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Orbit } from 'lucide-react';
 import IntelFeed from '@/components/IntelFeed';
 import ArdiPanel from '@/components/ArdiPanel';
 import MarketsPanel from '@/components/MarketsPanel';
@@ -19,6 +19,8 @@ import LiveAlerts from '@/components/LiveAlerts';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
 const SpaceCanvas = dynamic(() => import('@/components/SpaceCanvas'), { ssr: false });
+ const SolarSystemView = dynamic(() => import('@/components/SolarSystemView'), { ssr: false });
+const OceanView = dynamic(() => import('@/components/OceanView'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
 const CameraViewer = dynamic(() => import('@/components/CameraViewer'));
 const OsintPanel = dynamic(() => import('@/components/OsintPanel'));
@@ -111,6 +113,21 @@ export default function Dashboard() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|null>(null);
   const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('globe');
+  const [solarSystemActive, setSolarSystemActive] = useState(false); // click-to-focus solar system explorer, see SolarSystemView.tsx
+  const [oceanViewActive, setOceanViewActive] = useState(false); // live animated ocean, triggered from a maritime chokepoint/port click, see OceanView.tsx
+  const [oceanOrigin, setOceanOrigin] = useState<string | undefined>(undefined);
+
+  // Zoom all the way out on the 3D globe -> auto-transition into the solar
+  // system view, same as the manual button. Only fires from globe mode
+  // (never touches the 2D map), only fires once per crossing.
+  useEffect(() => {
+    if (mapProjection !== 'globe') return;
+    if (solarSystemActive) return;
+    if (mapView.zoom < 1.15) {
+      setSolarSystemActive(true);
+    }
+  }, [mapView.zoom, mapProjection, solarSystemActive]);
+
   const [mapStyle, setMapStyle] = useState<'dark'|'satellite'>('dark');
   const [sweepData, setSweepData] = useState<any>(null);
   const [scanTargets, setScanTargets] = useState<any[]>([]);
@@ -295,6 +312,10 @@ export default function Dashboard() {
       setLiveFeedUrl(entity.url);
       setLiveFeedName(entity.name);
       setLiveFeedEmbedAllowed(entity.embed_allowed !== false);
+    }
+    if (entity?.type === 'maritime_chokepoint' || entity?.type === 'maritime_port') {
+      setOceanOrigin(entity.name);
+      setOceanViewActive(true);
     }
   }, []);
 
@@ -735,6 +756,19 @@ export default function Dashboard() {
       {/* Isolated cosmic background overlay — decorative only, no data hooks */}
       <SpaceCanvas />
 
+      {/* Click-to-focus solar system explorer — full overlay, only touches
+          this one state flag, never the 2D map or the tracking data. */}
+      <ErrorBoundary name="SolarSystem">
+        <SolarSystemView active={solarSystemActive} onExit={() => { setSolarSystemActive(false); setMapView(v => ({ ...v, zoom: Math.max(v.zoom, 2.5) })); }} />
+      </ErrorBoundary>
+
+      {/* Live maritime water surface — opens from a chokepoint/port click,
+          closes with a single click back to the map. Isolated overlay,
+          only touches its own two state flags. */}
+      <ErrorBoundary name="Ocean">
+        <OceanView active={oceanViewActive} originLabel={oceanOrigin} onExit={() => setOceanViewActive(false)} />
+      </ErrorBoundary>
+
 
       {/* ── MAP VIEW CONTROLS (3D/2D + SATELLITE TOGGLE) ── */}
       <motion.div
@@ -771,6 +805,18 @@ export default function Dashboard() {
           )}
           <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[12px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
             {mapStyle === 'dark' ? 'SATELLITE' : 'NIGHT MODE'}
+          </span>
+        </button>
+
+        {/* Solar System Toggle */}
+        <button
+          onClick={() => setSolarSystemActive(true)}
+          className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
+          title="Solar System View"
+        >
+          <Orbit className="w-5 h-5 text-[var(--cyan-primary)] group-hover:scale-110 transition-transform" />
+          <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[12px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
+            SOLAR SYSTEM
           </span>
         </button>
 

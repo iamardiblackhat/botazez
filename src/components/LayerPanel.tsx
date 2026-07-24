@@ -219,7 +219,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
       initial={{ x: -60, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ type: 'spring', damping: 30, stiffness: 200, delay: 2.8 }}
-      className="absolute top-0 left-0 h-full w-[48px] flex flex-col items-center pt-24 pb-6 z-50 pointer-events-auto"
+      className="absolute top-0 left-0 h-full w-[68px] flex flex-col items-center pt-24 pb-6 z-50 pointer-events-auto"
       style={{
         background: 'rgba(0,0,0,0.15)',
         backdropFilter: 'blur(24px) saturate(1.2)',
@@ -239,9 +239,11 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
               onMouseEnter={() => setHoveredGroup(group.label)}
               onMouseLeave={() => setHoveredGroup(null)}
             >
-              {/* Icon Button */}
+              {/* Icon Button — icon + always-visible short label, so the
+                  sidebar is self-explanatory without requiring a hover.
+                  The full name + sub-options still appear in the flyout. */}
               <div
-                className="w-10 h-10 flex items-center justify-center cursor-pointer rounded-lg transition-all duration-300"
+                className="w-[60px] py-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer rounded-lg transition-all duration-300"
                 style={{
                   background: isHovered ? 'rgba(255,255,255,0.05)' : 'transparent',
                 }}
@@ -259,6 +261,20 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                     filter: groupActive ? 'drop-shadow(0 0 4px rgba(255,255,255,0.3))' : 'none',
                   }}
                 />
+                <span
+                  className="font-mono uppercase text-center leading-[1.1] transition-all duration-300"
+                  style={{
+                    fontSize: 7,
+                    letterSpacing: '0.03em',
+                    color: groupActive
+                      ? 'rgba(255,255,255,0.6)'
+                      : isHovered
+                        ? 'rgba(255,255,255,0.35)'
+                        : 'rgba(255,255,255,0.18)',
+                  }}
+                >
+                  {group.label}
+                </span>
               </div>
 
               {/* Flyout (LEFT side) */}
@@ -269,7 +285,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                     animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
                     exit={{ opacity: 0, x: -4, filter: 'blur(2px)' }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="absolute left-[52px] top-1/2 -translate-y-1/2 min-w-[220px] rounded-xl p-3 z-[100] pointer-events-auto"
+                    className="absolute left-[72px] top-1/2 -translate-y-1/2 min-w-[220px] rounded-xl p-3 z-[100] pointer-events-auto"
                     style={{
                       background: 'rgba(0,0,0,0.6)',
                       backdropFilter: 'blur(40px) saturate(1.5)',
@@ -320,11 +336,11 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
       {setTheme && (
         <button
           onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
-          className="w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-500 cursor-pointer"
+          className="w-[60px] py-1.5 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-500 cursor-pointer"
           style={{
             background: theme === 'ghost' ? 'rgba(179, 136, 255, 0.1)' : 'transparent',
           }}
-          title="Ghost Protocol"
+          title="Ghost Protocol — alternate stealth theme"
         >
           <Ghost
             className="transition-all duration-500"
@@ -335,6 +351,12 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
               filter: theme === 'ghost' ? 'drop-shadow(0 0 6px rgba(179, 136, 255, 0.5))' : 'none',
             }}
           />
+          <span
+            className="font-mono uppercase text-center leading-[1.1]"
+            style={{ fontSize: 7, letterSpacing: '0.03em', color: theme === 'ghost' ? '#B388FF' : 'rgba(255,255,255,0.18)' }}
+          >
+            Ghost
+          </span>
         </button>
       )}
     </motion.div>
