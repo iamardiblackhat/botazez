@@ -108,10 +108,12 @@ export default function GlobalStatusBar() {
   const cryptoContent = crypto.length > 0 ? (
     <>
       <span className="text-[var(--border-primary)] mx-1">|</span>
+      <span className="text-[var(--cyan-primary)]/60 font-bold tracking-widest text-[10px] mx-1" title="Live market prices">MARKETS</span>
       <span className="inline-flex items-center gap-3 mx-2">
         {crypto.map(c => (
-          <span key={c.symbol} className="inline-flex items-center gap-1 mx-2">
+          <span key={c.symbol} className="inline-flex items-center gap-1.5 mx-2">
             <CryptoIcon symbol={c.symbol} />
+            <span className="text-[var(--text-muted)]/70 font-bold tracking-wider">{c.symbol}</span>
             <span className="text-[var(--text-primary)] font-bold tracking-wider">{formatPrice(c.price)}</span>
           </span>
         ))}
@@ -122,6 +124,7 @@ export default function GlobalStatusBar() {
   const quakeContent = quakes.length > 0 ? (
     <>
       <span className="text-[var(--border-primary)] mx-1">|</span>
+      <span className="text-[#FF9500]/60 font-bold tracking-widest text-[10px] mx-1" title="Recent earthquakes, magnitude 4.0+ (USGS)">QUAKES M4.0+</span>
       {quakes.map(quake => (
         <span 
           key={quake.id} 

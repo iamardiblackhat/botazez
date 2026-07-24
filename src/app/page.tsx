@@ -55,7 +55,7 @@ const UptimeClock = () => {
     }, 1000);
     return () => clearInterval(iv);
   }, []);
-  return <span className="hidden lg:inline">UPTIME: <span className="text-[var(--gold-primary)]">{uptime}</span></span>;
+  return <span title="Session uptime — how long this dashboard has been running" className="hidden lg:inline pointer-events-auto">UPTIME: <span className="text-[var(--gold-primary)]">{uptime}</span></span>;
 };
 
 const ZuluClock = () => {
@@ -67,7 +67,7 @@ const ZuluClock = () => {
     }, 1000);
     return () => clearInterval(iv);
   }, []);
-  return <span className="text-[var(--cyan-primary)] font-bold tabular-nums">{time || 'ZULU --:--:--Z'}</span>;
+  return <span title="Zulu time — UTC, the universal time zone used across all military and intel feeds" className="text-[var(--cyan-primary)] font-bold tabular-nums pointer-events-auto">{time || 'ZULU --:--:--Z'}</span>;
 };
 
 /** Real entity count — no fake throughput metrics */
@@ -859,11 +859,11 @@ export default function Dashboard() {
           <ZuluClock />
         </span>
 
-        <span className="flex items-center gap-1">SYS: <span className={backendStatus === 'connected' ? 'text-[var(--alert-green)]' : 'text-[var(--alert-red)]'}>{backendStatus.toUpperCase()}</span></span>
+        <span title="Live connection to the data backend — GREEN means feeds are flowing" className="flex items-center gap-1 pointer-events-auto">SYS: <span className={backendStatus === 'connected' ? 'text-[var(--alert-green)]' : 'text-[var(--alert-red)]'}>{backendStatus.toUpperCase()}</span></span>
 
-        {spaceWeather && <span className="hidden lg:inline">SOLAR: <span style={{ color: spaceWeather.storm_color, fontWeight: 700 }}>Kp{spaceWeather.kp_index}</span></span>}
+        {spaceWeather && <span title="Kp index — geomagnetic storm scale, 0 (quiet) to 9 (extreme solar storm)" className="hidden lg:inline pointer-events-auto">SOLAR: <span style={{ color: spaceWeather.storm_color, fontWeight: 700 }}>Kp{spaceWeather.kp_index}</span></span>}
 
-        <span className="hidden lg:inline-flex items-center gap-1">
+        <span title="Number of live map layers currently switched on" className="hidden lg:inline-flex items-center gap-1 pointer-events-auto">
           <span className="text-[var(--cyan-primary)] font-bold">{Object.values(activeLayers).filter(Boolean).length}</span>
           <span className="text-[var(--text-muted)]/60">FEEDS</span>
         </span>
