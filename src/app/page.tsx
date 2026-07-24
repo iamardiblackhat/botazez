@@ -890,15 +890,17 @@ export default function Dashboard() {
 
 
       {/* ── RIGHT TOOL STRIP (desktop only — mobile uses bottom nav) ── */}
-      {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1 rounded-full border border-white/5">
+      {/* Labels are always visible (not hover-only) so this strip isn't a mystery row of icons */}
+      {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1.5 rounded-xl border border-white/5">
         <div className="relative group">
-          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
-            <Radar className={`w-4 h-4 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} title="OSINT / Recon" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
+            <Radar className={`w-4 h-4 shrink-0 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
+            <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/50'}`}>Intel</span>
           </button>
           {/* OSINT / Recon Panel Slideout */}
           <AnimatePresence>
             {showIntel && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-12 top-1/2 -translate-y-1/2 w-80">
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-28 top-1/2 -translate-y-1/2 w-80">
                 <OsintPanel theme={osirisTheme} setTheme={setOsirisTheme} onSweepVisualize={setSweepData} onScanGeolocate={(target, data) => {
                   setScanTargets(prev => {
                     const existing = prev.filter(t => t.id !== target);
@@ -912,13 +914,14 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
-            <BarChart3 className={`w-4 h-4 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} title="Markets" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
+            <BarChart3 className={`w-4 h-4 shrink-0 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+            <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/50'}`}>Markets</span>
           </button>
           {/* Markets Panel Slideout */}
           <AnimatePresence>
             {showMarkets && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-12 top-1/2 -translate-y-1/2 w-80">
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-28 top-1/2 -translate-y-1/2 w-80">
                 <MarketsPanel data={data} spaceWeather={spaceWeather} />
               </motion.div>
             )}
@@ -926,13 +929,14 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); setShowEntityGraph(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
-            <AlertTriangle className={`w-4 h-4 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); setShowEntityGraph(false); }} title="Alerts" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
+            <AlertTriangle className={`w-4 h-4 shrink-0 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
+            <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/50'}`}>Alerts</span>
           </button>
           {/* Alerts Panel Slideout */}
           <AnimatePresence>
             {showAlerts && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-12 top-1/2 -translate-y-1/2 w-80">
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-28 top-1/2 -translate-y-1/2 w-80">
                 <LiveAlerts data={data} onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })} onWatchFeed={(url, name) => { setLiveFeedUrl(url); setLiveFeedName(name); }} />
               </motion.div>
             )}
@@ -940,18 +944,20 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowEntityGraph(!showEntityGraph); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showEntityGraph ? 'bg-[#D4AF37]/20' : 'hover:bg-white/10'}`}>
-            <Network className={`w-4 h-4 ${showEntityGraph ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowEntityGraph(!showEntityGraph); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); }} title="Entity Graph" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showEntityGraph ? 'bg-[#D4AF37]/20' : 'hover:bg-white/10'}`}>
+            <Network className={`w-4 h-4 shrink-0 ${showEntityGraph ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+            <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showEntityGraph ? 'text-[var(--gold-primary)]' : 'text-white/50'}`}>Graph</span>
           </button>
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowEntityGraph(false); }} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
-            <Search className={`w-4 h-4 ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowEntityGraph(false); }} title="Search" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
+            <Search className={`w-4 h-4 shrink-0 ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
+            <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/50'}`}>Search</span>
           </button>
           <AnimatePresence>
             {showDesktopSearch && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-12 top-1/2 -translate-y-1/2 w-80">
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="absolute right-28 top-1/2 -translate-y-1/2 w-80">
                 <SearchBar alwaysExpanded onLocate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, zoom, ts: Date.now() }); setShowDesktopSearch(false); }} />
               </motion.div>
             )}
