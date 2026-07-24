@@ -57,6 +57,7 @@ export default function IntelFeed({ data, onLocate }: IntelFeedProps) {
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
+        title={expanded ? 'Collapse panel' : 'Expand panel'}
         className="flex items-center justify-between px-4 py-3 hover:bg-[var(--hover-accent)] transition-colors"
       >
         <div className="flex items-center gap-2">
@@ -113,6 +114,8 @@ export default function IntelFeed({ data, onLocate }: IntelFeedProps) {
                             e.stopPropagation();
                             onLocate?.(item.coords[0], item.coords[1]);
                           }}
+                          title="Locate on map"
+                          aria-label="Locate on map"
                           className="text-[var(--text-muted)] hover:text-[var(--cyan-primary)] transition-colors"
                         >
                           <MapPin className="w-2.5 h-2.5" />

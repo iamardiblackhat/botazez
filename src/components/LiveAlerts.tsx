@@ -127,6 +127,7 @@ export default function LiveAlerts({ data, onLocate, onWatchFeed }: LiveAlertsPr
         onClick={() => setExpanded(!expanded)}
         role="button"
         tabIndex={0}
+        title={expanded ? 'Collapse panel' : 'Expand panel'}
         className="flex-shrink-0 flex items-center justify-between px-3 py-2 hover:bg-[var(--hover-accent)] transition-colors cursor-pointer outline-none border-b border-[rgba(255,255,255,0.05)] bg-[rgba(0,0,0,0.3)]"
       >
         <div className="flex items-center gap-2">

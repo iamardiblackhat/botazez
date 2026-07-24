@@ -27,7 +27,7 @@ export default function ScmPanel({ data }: ScmPanelProps) {
 
   return (
     <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.7, duration: 0.6 }} className="glass-panel p-3 pointer-events-auto mt-3 border border-[#00BCD4]/30" style={{ background: 'rgba(0, 188, 212, 0.05)' }}>
-      <button onClick={() => setExpanded(!expanded)} className="flex items-center justify-between w-full mb-2">
+      <button onClick={() => setExpanded(!expanded)} title={expanded ? 'Collapse panel' : 'Expand panel'} className="flex items-center justify-between w-full mb-2">
         <div className="flex items-center gap-2">
           <Target className="w-3.5 h-3.5 text-[#00BCD4]" />
           <span className="hud-text text-[12px] text-[var(--text-primary)]">SCM RISK COMMAND</span>

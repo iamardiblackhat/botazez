@@ -42,6 +42,7 @@ export default function ViewPresets({ onNavigate }: ViewPresetsProps) {
           <button
             key={p.label}
             onClick={() => onNavigate(p.lat, p.lng, p.zoom)}
+            title={(p as any).hot ? `${p.label} — active conflict / hotspot region` : `Fly to ${p.label}`}
             className={`flex items-center gap-1.5 px-2 py-1.5 rounded text-[12px] font-mono tracking-wider border border-transparent hover:border-[var(--border-primary)] hover:text-[var(--gold-primary)] transition-all hover:scale-[1.02] active:scale-[0.98] ${(p as any).hot ? 'text-[var(--alert-red)] hover:border-[var(--alert-red)]/30 hover:bg-[var(--alert-red)]/5' : 'text-[var(--text-muted)] hover:bg-[var(--hover-accent)]'}`}
           >
             <span className="text-[11px] flex-shrink-0">{p.icon}</span>

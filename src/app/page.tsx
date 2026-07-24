@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Orbit } from 'lucide-react';
+import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Orbit, Info } from 'lucide-react';
 import IntelFeed from '@/components/IntelFeed';
 import ArdiPanel from '@/components/ArdiPanel';
 import MarketsPanel from '@/components/MarketsPanel';
@@ -22,6 +22,7 @@ const SpaceCanvas = dynamic(() => import('@/components/SpaceCanvas'), { ssr: fal
  const SolarSystemView = dynamic(() => import('@/components/SolarSystemView'), { ssr: false });
 const OceanView = dynamic(() => import('@/components/OceanView'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
+const MapLegend = dynamic(() => import('@/components/MapLegend'));
 const CameraViewer = dynamic(() => import('@/components/CameraViewer'));
 const OsintPanel = dynamic(() => import('@/components/OsintPanel'));
 const EntityGraphPanel = dynamic(() => import('@/components/EntityGraphPanel'));
@@ -104,6 +105,7 @@ export default function Dashboard() {
   const [activeCamera, setActiveCamera] = useState<any>(null);
   const [spaceWeather, setSpaceWeather] = useState<any>(null);
   const [showLayers, setShowLayers] = useState(true);
+  const [showLegend, setShowLegend] = useState(false);
   const [showMarkets, setShowMarkets] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showScmPanel, setShowScmPanel] = useState(true);
@@ -823,7 +825,22 @@ export default function Dashboard() {
           </span>
         </button>
 
+        {/* Map Legend Toggle — decodes what every dot color on the map means.
+            There was previously no legend anywhere in the app. */}
+        <button
+          onClick={() => setShowLegend(v => !v)}
+          className={`glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative ${showLegend ? 'border-[var(--gold-primary)]/40' : ''}`}
+          title="Map Legend"
+        >
+          <Info className={`w-5 h-5 group-hover:scale-110 transition-transform ${showLegend ? 'text-[var(--gold-primary)]' : 'text-[var(--cyan-primary)]'}`} />
+          <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[12px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
+            LEGEND
+          </span>
+        </button>
+
       </motion.div>
+
+      <MapLegend open={showLegend} onClose={() => setShowLegend(false)} />
 
       {/* ── HEADER ── */}
       {/* Hidden during a full-screen takeover (solar system / ocean) — see
@@ -1099,11 +1116,11 @@ export default function Dashboard() {
                     <>
                       <div className="glass-panel-sm p-2 mb-2">
                         <div className="grid grid-cols-5 gap-1 text-center">
-                          <div><div className="hud-label" style={{fontSize:'9px'}}>AIR</div><div className="hud-value text-[12px]">{totalFlights.toLocaleString()}</div></div>
-                          <div><div className="hud-label" style={{fontSize:'9px'}}>SAT</div><div className="hud-value text-[12px]">{(data.satellites?.length||0)}</div></div>
-                          <div><div className="hud-label" style={{fontSize:'9px'}}>CAM</div><div className="hud-value text-[12px]">{(data.cameras?.length||0)}</div></div>
-                          <div><div className="hud-label" style={{fontSize:'9px'}}>WX</div><div className="hud-value text-[12px]" style={{color:'var(--accent-weather)'}}>{(data.weather_events?.length||0)}</div></div>
-                          <div><div className="hud-label" style={{fontSize:'9px'}}>NUC</div><div className="hud-value text-[12px]" style={{color:'var(--accent-nuclear)'}}>{(data.infrastructure?.length||0)}</div></div>
+                          <div title="Aircraft tracked"><div className="hud-label" style={{fontSize:'9px'}}>AIR</div><div className="hud-value text-[12px]">{totalFlights.toLocaleString()}</div></div>
+                          <div title="Satellites tracked"><div className="hud-label" style={{fontSize:'9px'}}>SAT</div><div className="hud-value text-[12px]">{(data.satellites?.length||0)}</div></div>
+                          <div title="CCTV cameras"><div className="hud-label" style={{fontSize:'9px'}}>CAM</div><div className="hud-value text-[12px]">{(data.cameras?.length||0)}</div></div>
+                          <div title="Severe weather events"><div className="hud-label" style={{fontSize:'9px'}}>WX</div><div className="hud-value text-[12px]" style={{color:'var(--accent-weather)'}}>{(data.weather_events?.length||0)}</div></div>
+                          <div title="Nuclear facilities"><div className="hud-label" style={{fontSize:'9px'}}>NUC</div><div className="hud-value text-[12px]" style={{color:'var(--accent-nuclear)'}}>{(data.infrastructure?.length||0)}</div></div>
                         </div>
                       </div>
                       <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} isMobile={true} theme={osirisTheme} setTheme={setOsirisTheme} />
@@ -1136,15 +1153,15 @@ export default function Dashboard() {
       {!isMobile && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 3, duration: 0.8 }} className="desktop-only absolute bottom-8 z-[200] pointer-events-auto" style={{ left: '72px' }}>
           <div className="flex items-center gap-6 text-[11px] font-mono tracking-widest text-[var(--text-muted)] opacity-60">
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center" title="Latitude / longitude under the cursor">
               <span>COORD</span>
               <span ref={coordsDisplayRef} className="text-[var(--gold-primary)] font-bold tabular-nums">—</span>
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center" title="Nearest named location under the cursor">
               <span>LOC</span>
               <span className="text-[var(--cyan-primary)] truncate max-w-[200px]">{locationLabel || 'HOVER MAP'}</span>
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center" title="Map zoom level">
               <span>Z</span>
               <span className="text-[var(--gold-primary)] font-bold tabular-nums">{mapView.zoom.toFixed(1)}</span>
             </div>
@@ -1163,7 +1180,7 @@ export default function Dashboard() {
           <div className="glass-panel p-5 osiris-glow">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-mono font-bold text-[var(--gold-primary)] tracking-wider">REGION DOSSIER</h2>
-              <button onClick={() => { setRegionDossier(null); setDossierLoading(false); }} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs">✕</button>
+              <button onClick={() => { setRegionDossier(null); setDossierLoading(false); }} title="Close" aria-label="Close region dossier" className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs">✕</button>
             </div>
             {dossierLoading ? (
               <div className="text-center py-8">
