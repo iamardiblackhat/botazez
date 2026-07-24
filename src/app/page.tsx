@@ -125,16 +125,11 @@ export default function Dashboard() {
   // a takeover is active makes these true full-screen views, as intended.
   const takeoverActive = solarSystemActive || oceanViewActive;
 
-  // Zoom all the way out on the 3D globe -> auto-transition into the solar
-  // system view, same as the manual button. Only fires from globe mode
-  // (never touches the 2D map), only fires once per crossing.
-  useEffect(() => {
-    if (mapProjection !== 'globe') return;
-    if (solarSystemActive) return;
-    if (mapView.zoom < 1.15) {
-      setSolarSystemActive(true);
-    }
-  }, [mapView.zoom, mapProjection, solarSystemActive]);
+  // NOTE: this used to auto-transition into the solar system view when you
+  // zoomed the 3D globe out past a threshold. Removed by request — it fired
+  // too easily off a casual scroll and felt jarring. Entry is now only via
+  // the explicit "Solar System View" button below, so it's a deliberate
+  // action instead of an accidental one.
 
   const [mapStyle, setMapStyle] = useState<'dark'|'satellite'>('dark');
   const [sweepData, setSweepData] = useState<any>(null);
