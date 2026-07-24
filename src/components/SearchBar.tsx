@@ -294,7 +294,7 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
                   <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-wider">
                     {r.type === 'coordinate' ? 'COORDS' : r.type}
                   </span>
-                  <span className="text-[10px] text-[var(--gold-primary)] font-mono opacity-40">
+                  <span className="text-[10px] text-[var(--gold-primary)] font-mono opacity-40" title="Zoom level it will fly to">
                     Z{r.zoomLevel}
                   </span>
                 </div>
