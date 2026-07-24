@@ -116,6 +116,14 @@ export default function Dashboard() {
   const [solarSystemActive, setSolarSystemActive] = useState(false); // click-to-focus solar system explorer, see SolarSystemView.tsx
   const [oceanViewActive, setOceanViewActive] = useState(false); // live animated ocean, triggered from a maritime chokepoint/port click, see OceanView.tsx
   const [oceanOrigin, setOceanOrigin] = useState<string | undefined>(undefined);
+  // Both SolarSystemView and OceanView are full-screen "takeover" overlays
+  // (same z-[200] as the header/status-bar chrome below). Without this guard
+  // their corner UI — readout text, focus/exit buttons — visually collides
+  // with the logo and the ARDI status panel, and since those sit later in
+  // the DOM at the same z-index they paint on top and steal the clicks
+  // meant for the overlay's own back/exit buttons. Hiding the chrome while
+  // a takeover is active makes these true full-screen views, as intended.
+  const takeoverActive = solarSystemActive || oceanViewActive;
 
   // Zoom all the way out on the 3D globe -> auto-transition into the solar
   // system view, same as the manual button. Only fires from globe mode
@@ -823,6 +831,10 @@ export default function Dashboard() {
       </motion.div>
 
       {/* ── HEADER ── */}
+      {/* Hidden during a full-screen takeover (solar system / ocean) — see
+          `takeoverActive` above for why: same corner, same z-index, would
+          otherwise paint over (and steal clicks from) the takeover's own UI. */}
+      {!takeoverActive && (
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1, delay: 2.5 }} className={`absolute top-4 z-[200] pointer-events-none flex flex-col`} style={{ left: isMobile ? '24px' : '64px', right: '24px' }}>
         <div className="flex items-center gap-3 w-fit">
           <img src="/ardi-logo.png" alt="BOTAZEZ — ARDI" className="w-9 h-9 md:w-11 md:h-11 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]" />
@@ -837,9 +849,15 @@ export default function Dashboard() {
           </span>
         </div>
       </motion.div>
+      )}
 
 
       {/* ── TOP-RIGHT STATUS (desktop) — C2 DISPLAY ── */}
+      {/* Also hidden during a takeover — this is the block whose ArdiPanel
+          button was sitting directly on top of SolarSystemView's own
+          "Back to Earth" button (both top-right, both z-[200], this one
+          later in the DOM), silently swallowing the click. */}
+      {!takeoverActive && (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 3 }} className="status-bar-desktop absolute top-4 right-6 z-[200] pointer-events-none flex items-center gap-4 text-[12px] font-mono tracking-widest text-[var(--text-muted)]">
 
         <span className="hidden lg:inline-flex items-center gap-1.5">
@@ -857,12 +875,13 @@ export default function Dashboard() {
 
         <UptimeClock />
         <span className="text-[12px] font-bold tracking-[0.2em] text-[var(--text-muted)] opacity-50 ml-2">V.4.1</span>
-        
+
         <ArdiPanel />
       </motion.div>
+      )}
 
       {/* ── MOBILE: Compact top status ── */}
-      {isMobile && (
+      {isMobile && !takeoverActive && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2.5 }} className="absolute top-3 right-3 z-[200] pointer-events-auto flex items-center gap-2">
           <ArdiPanel compact />
         </motion.div>
