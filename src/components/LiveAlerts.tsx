@@ -26,7 +26,7 @@ const RISK_COLORS: Record<string, string> = {
 export default function LiveAlerts({ data, onLocate, onWatchFeed }: LiveAlertsProps) {
   const [expanded, setExpanded] = useState(true);
   const [maximized, setMaximized] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'news' | 'quakes' | 'feeds'>('all');
+  const [filter, setFilter] = useState<'all' | 'news' | 'quakes' | 'feeds'>('feeds');
 
   // Built-in live feeds — verified video IDs (synced with /api/live-news)
   const BUILTIN_FEEDS = [
@@ -156,13 +156,13 @@ export default function LiveAlerts({ data, onLocate, onWatchFeed }: LiveAlertsPr
           >
             {/* Filters - Fixed Height, Never Shrinks */}
             <div className={`flex-shrink-0 flex gap-1 ${maximized ? 'px-6 py-4 border-b border-[#2A2A28] bg-[#111111]' : 'px-3 py-2 border-b border-[rgba(255,255,255,0.05)]'}`}>
-              {(['all', 'news', 'quakes', 'feeds'] as const).map(f => (
+              {(['feeds', 'all', 'news', 'quakes'] as const).map(f => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1.5 rounded text-[12px] font-mono tracking-wider transition-all ${filter === f ? 'bg-[var(--cyan-primary)]/20 text-[var(--cyan-primary)] border border-[var(--cyan-primary)]/50' : 'text-[#8A8880] border border-transparent hover:text-[#E8E6E0] hover:bg-[#2A2A28]'}`}
                 >
-                  {f.toUpperCase()}
+                  {f === 'feeds' ? 'TV NEWS' : f.toUpperCase()}
                 </button>
               ))}
             </div>

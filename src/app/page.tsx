@@ -107,7 +107,7 @@ export default function Dashboard() {
   const [showLayers, setShowLayers] = useState(true);
   const [showLegend, setShowLegend] = useState(false);
   const [showMarkets, setShowMarkets] = useState(false);
-  const [showAlerts, setShowAlerts] = useState(false);
+  const [showAlerts, setShowAlerts] = useState(true);
   const [showScmPanel, setShowScmPanel] = useState(true);
   const [showIntel, setShowIntel] = useState(false);
   const [showEntityGraph, setShowEntityGraph] = useState(false);
