@@ -15,6 +15,7 @@ import SharePanel from '@/components/SharePanel';
 import ViewPresets from '@/components/ViewPresets';
 import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import GlobalStatusBar from '@/components/GlobalStatusBar';
+import DashboardRow from '@/components/DashboardRow';
 import LiveAlerts from '@/components/LiveAlerts';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
@@ -107,7 +108,7 @@ export default function Dashboard() {
   const [showLayers, setShowLayers] = useState(true);
   const [showLegend, setShowLegend] = useState(false);
   const [showMarkets, setShowMarkets] = useState(false);
-  const [showAlerts, setShowAlerts] = useState(true);
+  const [showAlerts, setShowAlerts] = useState(false);
   const [showScmPanel, setShowScmPanel] = useState(true);
   const [showIntel, setShowIntel] = useState(false);
   const [showEntityGraph, setShowEntityGraph] = useState(false);
@@ -1241,6 +1242,18 @@ export default function Dashboard() {
 
       {/* Keyboard Shortcuts Overlay */}
       <KeyboardShortcuts />
+
+      {/* ── DASHBOARD ROW (bottom, desktop) — always-visible squares:
+          Live News, TV News, Live Cams, Cyber Threats. This is the
+          persistent "dashboard" layout, not a hover-only flyout. ── */}
+      {!isMobile && !takeoverActive && (
+        <DashboardRow
+          data={data}
+          onLocate={(lat, lng) => setFlyToLocation({ lat, lng, ts: Date.now() })}
+          onWatchFeed={(url, name) => { setLiveFeedUrl(url); setLiveFeedName(name); }}
+          onSelectCamera={(cam) => setActiveCamera(cam)}
+        />
+      )}
 
       {/* ── GLOBAL STATUS TICKER (bottom) ── */}
       <GlobalStatusBar />
