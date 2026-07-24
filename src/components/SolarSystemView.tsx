@@ -159,6 +159,16 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [focusedName, setFocusedName] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('overview');
+  // Soft fade-in so entering this view (whether via the auto zoom-out trigger
+  // or the manual button) never reads as a hard cut against whatever was on
+  // screen a frame earlier — see the mount effect below for the accompanying
+  // camera fly-out, which is the other half of "ease in, don't snap".
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!active) return;
+    const id = requestAnimationFrame(() => setVisible(true));
+    return () => { cancelAnimationFrame(id); setVisible(false); };
+  }, [active]);
 
   const stateRef = useRef({
     scene: null as THREE.Scene | null,
@@ -246,7 +256,13 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
     s.scene = scene;
 
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 4000);
-    camera.position.set(0, 55, 130);
+    // Start close in, near Earth's orbital position, rather than dropped
+    // straight into the full overview — the mount effect below flies the
+    // camera out from here to the overview framing, so activating this view
+    // (auto zoom-out or the manual button) continues the zoom-out motion
+    // instead of hard-cutting to a different scene.
+    const EARTH_DISTANCE = 20;
+    camera.position.set(EARTH_DISTANCE + 6, 3, 9);
     s.camera = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -261,7 +277,7 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
     controls.dampingFactor = 0.08;
     controls.minDistance = 20;
     controls.maxDistance = 220;
-    controls.target.set(0, 0, 0);
+    controls.target.set(EARTH_DISTANCE, 0, 0);
     s.controls = controls;
 
     // Starfield backdrop — real Milky Way photo on a large inverted sphere
@@ -285,7 +301,10 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
     // Planets, each on its own orbital pivot group so revolution is just a rotation of the pivot
     ALL_BODIES.forEach((def) => {
       const pivot = new THREE.Group();
-      pivot.rotation.y = def.isBlackHole ? -2.3 : Math.random() * Math.PI * 2; // black hole sits fixed off to its own side; planets stagger randomly
+      // Black hole angle picked so it actually lands inside the default overview
+      // camera's frustum (was -2.3, which put it ~77° off the view axis — entirely
+      // behind the camera, so it could never be seen or clicked from the overview).
+      pivot.rotation.y = def.isBlackHole ? 1.15 : Math.random() * Math.PI * 2; // black hole sits fixed off to its own side; planets stagger randomly
       scene.add(pivot);
       s.planetGroups.set(def.key, pivot);
 
@@ -447,6 +466,14 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
     };
     animate();
 
+    // Kick off the fly-out from the close-in Earth start (set above) to the
+    // full overview framing — same eased tween used for planet focus/return,
+    // so entry feels like one continuous motion rather than a snap.
+    beginTransition(new THREE.Vector3(0, 55, 130), new THREE.Vector3(0, 0, 0), 1.6, () => {
+      s.mode = 'overview';
+      setMode('overview');
+    });
+
     return () => {
       cancelAnimationFrame(s.animFrame);
       window.removeEventListener('resize', handleResize);
@@ -468,12 +495,12 @@ export default function SolarSystemView({ active, onExit, earthMaterial }: Solar
       setMode('overview');
       setFocusedName(null);
     };
-  }, [active, earthMaterial, focusPlanet, returnToOverview]);
+  }, [active, earthMaterial, focusPlanet, returnToOverview, beginTransition]);
 
   if (!active) return null;
 
   return (
-    <div className="absolute inset-0 z-[200]">
+    <div className={`absolute inset-0 z-[200] transition-opacity duration-700 ease-out ${visible ? 'opacity-100' : 'opacity-0'}`}>
       <div ref={containerRef} className="w-full h-full" />
 
       {/* Always-visible readout: what you're looking at + how to get back,
