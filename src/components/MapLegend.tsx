@@ -60,7 +60,7 @@ export default function MapLegend({ open, onClose }: { open: boolean; onClose: (
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 12 }}
-          className="glass-panel absolute bottom-[75px] md:bottom-[100px] left-[12px] md:left-[380px] z-[200] pointer-events-auto p-3 w-[220px]"
+          className="glass-panel absolute bottom-[75px] md:bottom-[250px] left-[12px] md:left-[380px] z-[200] pointer-events-auto p-3 w-[220px]"
         >
           <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/[0.08]">
             <span className="text-[10px] font-mono font-bold tracking-[0.2em] uppercase text-[var(--text-muted)]">Legend</span>

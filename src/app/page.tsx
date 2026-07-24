@@ -779,7 +779,7 @@ export default function Dashboard() {
       {/* ── MAP VIEW CONTROLS (3D/2D + SATELLITE TOGGLE) ── */}
       <motion.div
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 3.5 }}
-        className="absolute bottom-[75px] md:bottom-[100px] z-[200] flex items-center gap-2 pointer-events-none"
+        className="absolute bottom-[75px] md:bottom-[250px] z-[200] flex items-center gap-2 pointer-events-none"
         style={{ left: isMobile ? '12px' : '120px' }}
       >
         {/* 3D/2D Toggle */}
@@ -1152,7 +1152,7 @@ export default function Dashboard() {
 
       {/* ── BOTTOM RAW METRICS (desktop) ── */}
       {!isMobile && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 3, duration: 0.8 }} className="desktop-only absolute bottom-8 z-[200] pointer-events-auto" style={{ left: '72px' }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 3, duration: 0.8 }} className="desktop-only absolute z-[200] pointer-events-auto" style={{ left: '72px', bottom: '250px' }}>
           <div className="flex items-center gap-6 text-[11px] font-mono tracking-widest text-[var(--text-muted)] opacity-60">
             <div className="flex gap-2 items-center" title="Latitude / longitude under the cursor">
               <span>COORD</span>
@@ -1171,7 +1171,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Scale Bar (desktop) ── */}
-      <div className="desktop-only absolute bottom-[4.5rem] left-[12rem] z-[201] pointer-events-none">
+      <div className="desktop-only absolute left-[12rem] z-[201] pointer-events-none" style={{ bottom: '290px' }}>
         <ScaleBar zoom={mapView.zoom} latitude={mapView.latitude} />
       </div>
 
@@ -1259,7 +1259,7 @@ export default function Dashboard() {
       <GlobalStatusBar />
 
       {/* Shortcut hint */}
-      <div className="desktop-only absolute bottom-[26px] right-5 z-[200] pointer-events-none text-[9px] font-mono text-[var(--text-muted)]/70 tracking-widest">
+      <div className="desktop-only absolute right-5 z-[200] pointer-events-none text-[9px] font-mono text-[var(--text-muted)]/70 tracking-widest" style={{ bottom: '250px' }}>
         [?] SHORTCUTS · [F] FULLSCREEN · [S] SHARE · [R] RESET VIEW
       </div>
 

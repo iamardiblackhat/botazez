@@ -14,8 +14,8 @@ import { BUILTIN_FEEDS } from '@/lib/liveFeeds';
 
 function CardShell({ icon: Icon, title, count, accent, children }: any) {
   return (
-    <div className="glass-panel flex flex-col w-[260px] h-[200px] shrink-0 pointer-events-auto overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border-secondary)] shrink-0">
+    <div className="flex flex-col flex-1 min-w-[220px] h-full shrink-0 pointer-events-auto overflow-hidden border-r border-[var(--border-secondary)] last:border-r-0 bg-[#0a0a09]">
+      <div className="flex items-center gap-2 px-3 py-2 border-b-2 shrink-0" style={{ borderColor: `${accent}55`, background: 'rgba(0,0,0,0.4)' }}>
         <Icon className="w-3.5 h-3.5" style={{ color: accent }} />
         <span className="hud-text text-[11px] text-[var(--text-primary)] tracking-wider">{title}</span>
         {count !== undefined && (
@@ -46,7 +46,10 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
   const feeds = tvCategory === 'all' ? BUILTIN_FEEDS : BUILTIN_FEEDS.filter(f => f.category === tvCategory);
 
   return (
-    <div className="absolute bottom-[168px] left-[80px] right-[112px] z-[195] pointer-events-none flex gap-2 overflow-x-auto styled-scrollbar pb-1">
+    <div
+      className="absolute bottom-[22px] left-[68px] right-0 z-[195] pointer-events-auto flex h-[210px] border-t-2 border-[var(--border-primary)] overflow-x-auto"
+      style={{ background: '#0a0a09', boxShadow: '0 -8px 30px rgba(0,0,0,0.6)' }}
+    >
       {/* LIVE NEWS */}
       <CardShell icon={Newspaper} title="LIVE NEWS" count={news.length} accent="#D4AF37">
         {news.length === 0 ? (
