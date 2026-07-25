@@ -40,8 +40,13 @@ scanner/
 # Data files
 threatfox.json
 
-# Dev scripts (one-time migration helpers)
-scripts/
+# Dev scripts (one-time migration helpers) — but keep scripts required by
+# package.json (postinstall/dev/build) tracked. A bare "scripts/" excludes
+# the directory entry itself, which git cannot un-exclude a file from
+# (see gitignore(5), "It is not possible to re-include a file..."), so this
+# excludes contents via a glob instead, which negation can see into.
+scripts/*
+!scripts/copy-cesium-assets.mjs
 
 # AI agent config files
 CLAUDE.md
