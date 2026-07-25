@@ -14,6 +14,7 @@ export default function IntelIndexPage() {
   return (
     <>
       <header className="tl-section tl-section--tight">
+        <div className="tl-container">
         <p className="tl-eyebrow">Coverage</p>
         <h1 className="tl-h1">Intelligence domains</h1>
         <p className="tl-lede">
@@ -21,9 +22,11 @@ export default function IntelIndexPage() {
           its own page: what it watches, where the data comes from, and how to read it —
           before you ever open the globe.
         </p>
+      </div>
       </header>
 
       <section className="tl-section tl-section--tight">
+        <div className="tl-container">
         <div className="tl-domain-grid">
           {DOMAINS.map(domain => {
             const layers = layersFor(domain);
@@ -51,6 +54,7 @@ export default function IntelIndexPage() {
             );
           })}
         </div>
+      </div>
       </section>
     </>
   );

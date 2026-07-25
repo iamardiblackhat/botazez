@@ -31,6 +31,7 @@ export default async function DomainPage({ params }: { params: Promise<{ slug: s
   return (
     <>
       <header className="tl-section tl-section--tight">
+        <div className="tl-container">
         <p className="tl-eyebrow">
           <Link href="/intel" className="tl-breadcrumb">Domains</Link> · {domain.name}
         </p>
@@ -51,10 +52,12 @@ export default async function DomainPage({ params }: { params: Promise<{ slug: s
             <span className="tl-stat-label">API endpoints</span>
           </div>
         </div>
+      </div>
       </header>
 
       {/* Layers — the information-first table this domain contributes */}
       <section className="tl-section tl-section--tight">
+        <div className="tl-container">
         <h2 className="tl-h2">Layers</h2>
         <p className="tl-body">
           Each layer can be toggled independently on the live surface. Counts update from the
@@ -83,9 +86,11 @@ export default async function DomainPage({ params }: { params: Promise<{ slug: s
             </tbody>
           </table>
         </div>
+      </div>
       </section>
 
       <section className="tl-section tl-section--tight">
+        <div className="tl-container">
         <div className="tl-split">
           <div>
             <h2 className="tl-h2">Sources</h2>
@@ -100,13 +105,16 @@ export default async function DomainPage({ params }: { params: Promise<{ slug: s
             </ul>
           </div>
         </div>
+      </div>
       </section>
 
       <section className="tl-section tl-section--tight">
+        <div className="tl-container">
         <div className="tl-next-row">
           <Link href="/dashboard" className="tl-btn-primary">Open the live surface</Link>
           <Link href={`/intel/${next.slug}`} className="tl-btn-ghost">Next: {next.name} →</Link>
         </div>
+      </div>
       </section>
     </>
   );

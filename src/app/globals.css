@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Bricolage Grotesque carries the display voice — a grotesque with actual
+   character, deliberately not the Inter/Roboto default. Instrument Sans
+   sets text, JetBrains Mono stays for tabular data and HUD readouts. */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -61,7 +64,9 @@
 
   /* ── Fonts ── */
   --font-hud: 'JetBrains Mono', 'Courier New', monospace;
-  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-body: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Instrument Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* ── Spacing (responsive) ── */
   --panel-gap: 12px;
@@ -3094,4 +3099,26 @@ body.theme-light-dash .bg-black\/70 { background-color: rgba(240, 247, 252, 0.82
 @media (max-width: 640px) {
   .theme-light .tl-stat-row { gap: 22px; }
   .theme-light .tl-stat-value { font-size: 27px; }
+}
+
+/* Section headers pair a left-aligned block with a trailing link so the
+   page has an asymmetric rhythm rather than stacked centred blocks. */
+.theme-light .tl-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.theme-light .tl-section-head-cta { flex-shrink: 0; }
+
+/* Domain pages carry a lighter wash of the same sky so they belong to the
+   homepage rather than dropping to flat white. */
+.theme-light .tl-main:has(.tl-domain-grid),
+.theme-light .tl-main:has(.tl-table) {
+  background:
+    radial-gradient(900px 460px at 88% -6%, rgba(253, 224, 138, 0.20), transparent 62%),
+    radial-gradient(820px 440px at 6% 0%, rgba(125, 211, 252, 0.30), transparent 64%),
+    linear-gradient(180deg, #EAF5FD 0%, #F6FBFE 38%, #FFFFFF 100%);
 }

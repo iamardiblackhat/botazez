@@ -80,12 +80,19 @@ export default function HomePage() {
       {/* ── Domain grid ── */}
       <section className="tl-section" id="domains">
         <div className="tl-container">
-          <span className="tl-eyebrow">Coverage</span>
-          <h2 className="tl-h2">Every domain, on the same map</h2>
-          <p className="tl-lede">
-            Each domain is its own toggleable layer inside the Botazez dashboard, loaded on demand
-            so you only pull the data you actually want to see.
-          </p>
+          <div className="tl-section-head">
+            <div>
+              <span className="tl-eyebrow">Coverage</span>
+              <h2 className="tl-h2">Every domain, read on its own terms</h2>
+              <p className="tl-lede">
+                Eleven intelligence domains, each a toggleable layer on the live globe and each
+                with its own page — what it watches, which feeds supply it, and how to read it.
+              </p>
+            </div>
+            <Link href="/intel" className="tl-btn-ghost tl-section-head-cta">
+              All domains →
+            </Link>
+          </div>
           <div className="tl-grid">
             {DOMAINS.map(domain => (
               <FeatureCard key={domain.title} {...domain} />
