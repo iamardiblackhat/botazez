@@ -420,9 +420,12 @@ function BotazezGlobe({
       }
       source.show = true;
 
-      // Rebuild only when the record count changed — the upstream feeds
-      // replace arrays wholesale on each poll.
-      if (source.entities.values.length === records.length) continue;
+      // Rebuild when count or position signature changes. Pure count skips
+      // were missing live-data position updates (e.g. flights between polls).
+      const sig = records.length === 0 ? '' :
+        records.slice(0, 8).map(r => `${r.lat?.toFixed(2)},${r.lng?.toFixed(2)}`).join('|');
+      if (source.entities.values.length === records.length && source._sig === sig) continue;
+      source._sig = sig;
       source.entities.removeAll();
       paint(Cesium, source, records, style);
     }
