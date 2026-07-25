@@ -3,5 +3,21 @@
     "firecrawl",
     "gemini-api-docs-mcp",
     "next-devtools"
-  ]
+  ],
+  "enabledPlugins": {
+    "cesiumjs-skills@cesiumjs-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "cesiumjs-skills": {
+      "source": {
+        "source": "github",
+        "repo": "CesiumGS/cesiumjs-skills"
+      }
+    }
+  },
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Code_Remote__subscribe_pr_activity"
+    ]
+  }
 }
