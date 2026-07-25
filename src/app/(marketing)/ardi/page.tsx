@@ -8,8 +8,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   ShieldCheck, Radar, Eye, Activity, Lock, Terminal, Crosshair, ArrowUpRight, Globe,
+  type LucideIcon,
 } from 'lucide-react';
-import FeatureCard, { type FeatureCardProps } from '@/components/marketing/FeatureCard';
+import FeatureCard from '@/components/marketing/FeatureCard';
 import ArdiCollage from '@/components/marketing/ArdiCollage';
 
 // External ARDI destination — update to the live ARDI platform URL.
@@ -22,8 +23,14 @@ export const metadata: Metadata = {
     'ARDI is the advanced operations platform behind Botazez — cybersecurity testing, live threat monitoring, OSINT analysis, surveillance and investigative workflows in one secure command surface.',
 };
 
+interface CapabilityEntry {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}
+
 // Same capability set as src/components/ArdiPanel.tsx.
-const CAPABILITIES: FeatureCardProps[] = [
+const CAPABILITIES: CapabilityEntry[] = [
   { icon: ShieldCheck, title: 'Cybersecurity Testing', description: 'Offensive and defensive validation against your own perimeter.' },
   { icon: Activity, title: 'Threat Monitoring', description: 'Continuous risk surveillance across live signal sources.' },
   { icon: Radar, title: 'OSINT Analysis', description: 'Open-source intelligence fusion from dozens of public feeds.' },
@@ -88,8 +95,13 @@ export default function ArdiPage() {
             half a dozen disconnected tools.
           </p>
           <div className="tl-grid">
-            {CAPABILITIES.map(capability => (
-              <FeatureCard key={capability.title} {...capability} />
+            {CAPABILITIES.map(({ icon: Icon, ...capability }, index) => (
+              <FeatureCard
+                key={capability.title}
+                {...capability}
+                icon={<Icon className="w-5 h-5" strokeWidth={2} />}
+                index={index}
+              />
             ))}
           </div>
 

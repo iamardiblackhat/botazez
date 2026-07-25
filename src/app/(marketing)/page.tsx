@@ -9,8 +9,9 @@ import Link from 'next/link';
 import {
   Plane, Anchor, Camera, Activity, Flame, Newspaper, CloudSun, Satellite,
   ShieldAlert, Crosshair, Bitcoin, ShieldCheck, Radar, Eye, Terminal, Globe,
+  type LucideIcon,
 } from 'lucide-react';
-import FeatureCard, { type FeatureCardProps } from '@/components/marketing/FeatureCard';
+import FeatureCard from '@/components/marketing/FeatureCard';
 
 export const metadata: Metadata = {
   title: 'Botazez — Live Open Source Intelligence',
@@ -18,8 +19,15 @@ export const metadata: Metadata = {
     'Botazez fuses live flight tracking, maritime traffic, worldwide CCTV, seismic activity, wildfires, conflict zones and OSINT tooling into one real-time intelligence picture.',
 };
 
+interface DomainEntry {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  meta: string;
+}
+
 // Copy source: the "Key Capabilities" table in README.md.
-const DOMAINS: FeatureCardProps[] = [
+const DOMAINS: DomainEntry[] = [
   { icon: Plane, title: 'Aviation', description: 'Commercial, private, military and business-jet traffic tracked live across the globe.', meta: 'OpenSky Network' },
   { icon: Anchor, title: 'Maritime', description: '39 global ports and 10 strategic chokepoints mapped with standing naval intelligence.', meta: 'Static naval intel' },
   { icon: Camera, title: 'CCTV', description: 'Over 2,000 public street and highway cameras, streamable straight from the map.', meta: 'TfL · WSDOT · Caltrans · NYC DOT' },
@@ -94,8 +102,13 @@ export default function HomePage() {
             </Link>
           </div>
           <div className="tl-grid">
-            {DOMAINS.map(domain => (
-              <FeatureCard key={domain.title} {...domain} />
+            {DOMAINS.map(({ icon: Icon, ...domain }, index) => (
+              <FeatureCard
+                key={domain.title}
+                {...domain}
+                icon={<Icon className="w-5 h-5" strokeWidth={2} />}
+                index={index}
+              />
             ))}
           </div>
         </div>
