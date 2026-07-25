@@ -4,6 +4,9 @@
     "gemini-api-docs-mcp",
     "next-devtools"
   ],
+  "enabledPlugins": {
+    "cesiumjs-skills@cesiumjs-skills": true
+  },
   "extraKnownMarketplaces": {
     "cesiumjs-skills": {
       "source": {
@@ -12,7 +15,9 @@
       }
     }
   },
-  "enabledPlugins": {
-    "cesiumjs-skills@cesiumjs-skills": true
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Code_Remote__subscribe_pr_activity"
+    ]
   }
 }
