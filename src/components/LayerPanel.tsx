@@ -141,6 +141,39 @@ function ToggleSwitch({ active, onClick }: { active: boolean; onClick: () => voi
 
 function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'light', setTheme }: LayerPanelProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+  const isLight = theme === 'light';
+
+  const palette = isLight ? {
+    iconActive:    'var(--gold-primary)',
+    iconHover:     'rgba(12,108,168,0.60)',
+    iconIdle:      'rgba(15,34,51,0.32)',
+    labelActive:   'rgba(12,108,168,0.80)',
+    labelHover:    'rgba(15,34,51,0.55)',
+    labelIdle:     'rgba(15,34,51,0.28)',
+    btnHoverBg:    'rgba(12,108,168,0.07)',
+    flyoutBg:      'rgba(247,252,255,0.97)',
+    flyoutBorder:  'rgba(15,60,95,0.13)',
+    flyoutShadow:  '0 8px 32px rgba(15,45,75,0.13)',
+    glow:          'drop-shadow(0 0 4px rgba(12,108,168,0.35))',
+    separatorBg:   'rgba(15,60,95,0.10)',
+    flyoutGroupClr:'rgba(15,34,51,0.45)',
+    flyoutGrpBord: 'rgba(15,60,95,0.10)',
+  } : {
+    iconActive:    'rgba(255,255,255,0.70)',
+    iconHover:     'rgba(255,255,255,0.40)',
+    iconIdle:      'rgba(255,255,255,0.20)',
+    labelActive:   'rgba(255,255,255,0.60)',
+    labelHover:    'rgba(255,255,255,0.35)',
+    labelIdle:     'rgba(255,255,255,0.18)',
+    btnHoverBg:    'rgba(255,255,255,0.05)',
+    flyoutBg:      'rgba(0,0,0,0.60)',
+    flyoutBorder:  'rgba(255,255,255,0.06)',
+    flyoutShadow:  '0 8px 32px rgba(0,0,0,0.50)',
+    glow:          'drop-shadow(0 0 4px rgba(255,255,255,0.30))',
+    separatorBg:   'rgba(255,255,255,0.06)',
+    flyoutGroupClr:'rgba(255,255,255,0.30)',
+    flyoutGrpBord: 'rgba(255,255,255,0.04)',
+  };
 
   const toggle = (key: string) => setActiveLayers((prev: any) => ({ ...prev, [key]: !prev[key] }));
 
@@ -233,7 +266,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'li
               <div
                 className="w-[60px] py-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer rounded-lg transition-all duration-300"
                 style={{
-                  background: isHovered ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  background: isHovered ? palette.btnHoverBg : 'transparent',
                 }}
               >
                 <Icon
@@ -241,12 +274,8 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'li
                   style={{
                     width: 16,
                     height: 16,
-                    color: groupActive
-                      ? 'rgba(255,255,255,0.7)'
-                      : isHovered
-                        ? 'rgba(255,255,255,0.4)'
-                        : 'rgba(255,255,255,0.2)',
-                    filter: groupActive ? 'drop-shadow(0 0 4px rgba(255,255,255,0.3))' : 'none',
+                    color: groupActive ? palette.iconActive : isHovered ? palette.iconHover : palette.iconIdle,
+                    filter: groupActive ? palette.glow : 'none',
                   }}
                 />
                 <span
@@ -254,11 +283,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'li
                   style={{
                     fontSize: 7,
                     letterSpacing: '0.03em',
-                    color: groupActive
-                      ? 'rgba(255,255,255,0.6)'
-                      : isHovered
-                        ? 'rgba(255,255,255,0.35)'
-                        : 'rgba(255,255,255,0.18)',
+                    color: groupActive ? palette.labelActive : isHovered ? palette.labelHover : palette.labelIdle,
                   }}
                 >
                   {group.label}
@@ -275,14 +300,14 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'li
                     transition={{ duration: 0.18, ease: 'easeOut' }}
                     className="absolute left-[72px] top-1/2 -translate-y-1/2 min-w-[220px] rounded-xl p-3 z-[100] pointer-events-auto"
                     style={{
-                      background: 'rgba(0,0,0,0.6)',
+                      background: palette.flyoutBg,
                       backdropFilter: 'blur(40px) saturate(1.5)',
                       WebkitBackdropFilter: 'blur(40px) saturate(1.5)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                      border: `1px solid ${palette.flyoutBorder}`,
+                      boxShadow: palette.flyoutShadow,
                     }}
                   >
-                    <div className="text-[12px] font-mono tracking-[0.2em] uppercase text-white/30 mb-2.5 pb-1.5 border-b border-white/[0.04]">
+                    <div className="text-[12px] font-mono tracking-[0.2em] uppercase mb-2.5 pb-1.5" style={{ color: palette.flyoutGroupClr, borderBottom: `1px solid ${palette.flyoutGrpBord}` }}>
                       {group.fullLabel}
                     </div>
                     <div className="flex flex-col gap-0.5">
@@ -318,7 +343,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'li
       </div>
 
       {/* Subtle separator */}
-      <div className="w-5 h-px bg-white/[0.06] my-2" />
+      <div className="w-5 h-px my-2" style={{ background: palette.separatorBg }} />
 
       {/* Surface switcher — Daylight / Core / Ghost */}
       {setTheme && <ThemeSwitch theme={theme} setTheme={setTheme} />}
