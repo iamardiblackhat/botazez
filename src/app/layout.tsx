@@ -13,7 +13,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
-  colorScheme: "dark",
+  // The dashboard is dark and the marketing pages are light — let each
+  // route opt in via its own `color-scheme` rather than forcing dark chrome.
+  colorScheme: "light dark",
 };
 
 export const metadata: Metadata = {

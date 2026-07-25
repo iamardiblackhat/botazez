@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Bricolage Grotesque carries the display voice — a grotesque with actual
+   character, deliberately not the Inter/Roboto default. Instrument Sans
+   sets text, JetBrains Mono stays for tabular data and HUD readouts. */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -61,11 +64,25 @@
 
   /* ── Fonts ── */
   --font-hud: 'JetBrains Mono', 'Courier New', monospace;
-  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-body: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Instrument Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* ── Spacing (responsive) ── */
   --panel-gap: 12px;
   --edge-pad: 20px;
+
+  /* ── Dashboard chrome (rail + toggles) ──
+     Declared as tokens so the daylight surface can restate them;
+     white-alpha values are invisible on a light background. */
+  --rail-bg: rgba(0, 0, 0, 0.15);
+  --toggle-track-on: rgba(255, 255, 255, 0.20);
+  --toggle-track-off: transparent;
+  --toggle-edge-on: rgba(255, 255, 255, 0.35);
+  --toggle-edge-off: rgba(255, 255, 255, 0.12);
+  --toggle-knob-on: rgba(255, 255, 255, 0.85);
+  --toggle-knob-off: rgba(255, 255, 255, 0.20);
+  --toggle-knob-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
 }
 
 /* 🔥
@@ -132,6 +149,10 @@ html, body {
   overflow: hidden;
   background: var(--bg-void);
   color: var(--text-primary);
+  /* Was previously forced by viewport.colorScheme="dark"; that meta now
+     allows both schemes, so the dark base is pinned here instead.
+     `.theme-light` re-declares `color-scheme: light` for its subtree. */
+  color-scheme: dark;
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -2308,3 +2329,811 @@ a.glass-panel:active { transform: translateY(0); }
   a.glass-panel:hover { transform: none; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   BOTAZEZ — LIGHT MARKETING THEME (scoped to .theme-light)
+   Cloud white · sky blue · nature green · sun yellow.
+   Gradient-first, light only. Purely additive: nothing above this
+   block (dark :root tokens, .theme-ghost, dashboard classes) is
+   modified or overridden.
+   ═══════════════════════════════════════════════════════════════ */
+.theme-light {
+  --sky-50:  #F0F9FF;
+  --sky-100: #E0F2FE;
+  --sky-200: #BAE6FD;
+  --sky-300: #7DD3FC;
+  --sky-500: #38BDF8;
+  --sky-700: #0284C7;
+  --leaf-200: #BBF7D0;
+  --leaf-400: #86EFAC;
+  --leaf-600: #16A34A;
+  --leaf-800: #166534;
+  --sun-200: #FEF3C7;
+  --sun-300: #FDE68A;
+  --sun-500: #FBBF24;
+  --sun-700: #B45309;
+  --cloud-white: #FFFFFF;
+  --ink-900: #0F172A;
+  --ink-600: #475569;
+  --ink-400: #94A3B8;
+  --line-soft: rgba(15, 23, 42, 0.08);
+
+  --gradient-hero: linear-gradient(135deg, #F0F9FF 0%, #BFE9FF 40%, #CFF3D8 72%, #FFE9A8 100%);
+  --gradient-accent: linear-gradient(135deg, var(--sky-500), var(--leaf-600));
+  --gradient-sun: linear-gradient(135deg, var(--sun-300), var(--sun-500));
+  --gradient-soft: linear-gradient(160deg, #FFFFFF 0%, #F4FBFF 55%, #F2FDF6 100%);
+
+  background: var(--cloud-white);
+  color: var(--ink-900);
+  color-scheme: light;
+  font-family: var(--font-body);
+
+  /* html/body are `overflow: hidden` globally for the dashboard, so the
+     marketing shell acts as its own scroll container instead. */
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* The global 0.6s colour transition is tuned for the dashboard's theme
+   swap; marketing hovers should feel immediate. */
+.theme-light *,
+.theme-light *::before,
+.theme-light *::after {
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+              color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.theme-light ::selection { background: var(--sky-200); color: var(--ink-900); }
+
+.theme-light :where(button, a, [role="button"]):focus-visible {
+  outline: 2px solid var(--sky-700);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── Layout helpers ── */
+.tl-shell { display: flex; flex-direction: column; min-height: 100%; }
+.tl-main { flex: 1 1 auto; }
+.tl-container { width: 100%; max-width: 1180px; margin: 0 auto; padding-inline: 20px; }
+
+.tl-section { padding-block: 72px; }
+.tl-section-tint { background: var(--gradient-soft); }
+
+.tl-eyebrow {
+  display: inline-block;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--sky-700);
+  background: var(--sky-50);
+  border: 1px solid var(--sky-200);
+  border-radius: 999px;
+  padding: 6px 14px;
+}
+
+.tl-h2 {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink-900);
+  margin: 18px 0 10px;
+}
+
+.tl-lede {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink-600);
+  max-width: 62ch;
+}
+
+.tl-gradient-text {
+  background: var(--gradient-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Nav ── */
+.tl-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.tl-nav::after {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, var(--sky-500), var(--leaf-400), var(--sun-500));
+}
+.tl-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+}
+.tl-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-hud);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  font-size: 15px;
+  color: var(--ink-900);
+  text-decoration: none;
+}
+.tl-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: var(--gradient-accent);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(56, 189, 248, 0.35);
+}
+.tl-nav-links { display: flex; align-items: center; gap: 4px; }
+.tl-nav-link {
+  position: relative;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-600);
+  text-decoration: none;
+}
+.tl-nav-link:hover { color: var(--ink-900); background: var(--sky-50); }
+.tl-nav-link[data-active='true'] {
+  color: var(--sky-700);
+  background: var(--sky-100);
+}
+
+/* ── Buttons ── */
+.tl-btn-primary,
+.tl-btn-ghost,
+.tl-btn-sun {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 24px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.tl-btn-primary {
+  color: #fff;
+  background: var(--gradient-accent);
+  box-shadow: 0 10px 26px rgba(22, 163, 74, 0.22), 0 4px 10px rgba(56, 189, 248, 0.22);
+}
+.tl-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(22, 163, 74, 0.28); }
+.tl-btn-ghost {
+  color: var(--ink-900);
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+.tl-btn-ghost:hover { background: #fff; border-color: var(--sky-300); transform: translateY(-2px); }
+.tl-btn-sun {
+  color: #3B2A05;
+  background: var(--gradient-sun);
+  box-shadow: 0 10px 26px rgba(251, 191, 36, 0.32);
+}
+.tl-btn-sun:hover { transform: translateY(-2px); }
+
+/* ── Hero ── */
+.tl-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--gradient-hero);
+  padding-block: 92px 88px;
+}
+.tl-hero::before {
+  content: '';
+  position: absolute;
+  top: -140px; right: -80px;
+  width: 340px; height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.55), rgba(251, 191, 36, 0) 68%);
+  pointer-events: none;
+}
+.tl-hero::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 90px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #FFFFFF 100%);
+  pointer-events: none;
+}
+/* Left-aligned, not centre-stacked — the eyebrow sits offset from the
+   headline rather than stacked directly above it, so the block reads
+   as composed rather than a template with copy dropped in. */
+.tl-hero-inner {
+  position: relative;
+  z-index: 1;
+  text-align: left;
+  max-width: 900px;
+  padding-left: clamp(0px, 4vw, 56px);
+  border-left: 1px solid rgba(15, 60, 95, 0.12);
+}
+.tl-hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(38px, 6.8vw, 68px);
+  line-height: 1.02;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--ink-900);
+  margin: 14px 0 0;
+}
+.tl-hero p {
+  margin: 22px 0 0;
+  max-width: 56ch;
+  font-size: clamp(15px, 1.6vw, 18px);
+  line-height: 1.7;
+  color: var(--ink-600);
+}
+.tl-hero-cta {
+  margin-top: 34px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: flex-start;
+}
+.tl-hero-stats {
+  margin-top: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 34px;
+  justify-content: flex-start;
+  font-family: var(--font-hud);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-600);
+}
+
+@media (max-width: 640px) {
+  .tl-hero-inner { padding-left: 16px; border-left-width: 2px; }
+}
+
+/* ── Cards ── */
+.tl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 40px;
+}
+.tl-card {
+  position: relative;
+  overflow: hidden;
+  background: var(--cloud-white);
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+.tl-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--gradient-accent);
+  opacity: 0;
+}
+.tl-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--sky-200);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.10);
+}
+.tl-card:hover::before { opacity: 1; }
+.tl-card-icon {
+  display: grid;
+  place-items: center;
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--sky-100), var(--leaf-200));
+  color: var(--leaf-800);
+  margin-bottom: 14px;
+}
+.tl-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-900);
+  margin-bottom: 6px;
+}
+.tl-card-desc { font-size: 14px; line-height: 1.6; color: var(--ink-600); }
+.tl-card-meta {
+  margin-top: 12px;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+/* ── Panels / teaser ── */
+.tl-panel {
+  border-radius: 24px;
+  padding: clamp(24px, 4vw, 44px);
+  background: var(--gradient-hero);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+}
+.tl-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.tl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+/* ── ARDI page collage ── */
+.tl-collage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-top: 34px;
+  user-select: none;
+}
+.tl-collage img,
+.tl-collage .tl-img-fallback { display: block; height: auto; }
+.tl-img-fallback {
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--gradient-accent);
+  color: #fff;
+  font-family: var(--font-hud);
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  font-size: 18px;
+  min-height: 150px;
+}
+
+/* ── Footer ── */
+.tl-footer {
+  background: var(--gradient-soft);
+  border-top: 1px solid var(--line-soft);
+  padding-block: 40px 32px;
+}
+.tl-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.tl-footer-links { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.tl-footer-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-600);
+  text-decoration: none;
+}
+.tl-footer-link:hover { color: var(--sky-700); }
+.tl-footer-note {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+  color: var(--ink-400);
+}
+
+@media (max-width: 640px) {
+  .tl-section { padding-block: 52px; }
+  .tl-hero { padding-block: 60px 56px; }
+  .tl-nav-link { padding: 8px 10px; font-size: 13px; }
+  .tl-hero-cta .tl-btn-primary,
+  .tl-hero-cta .tl-btn-ghost { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-light *,
+  .theme-light *::before,
+  .theme-light *::after { transition: none !important; }
+  .tl-card:hover,
+  .tl-btn-primary:hover,
+  .tl-btn-ghost:hover,
+  .tl-btn-sun:hover { transform: none; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME: DAYLIGHT (DEFAULT) — light monitoring surface
+   ───────────────────────────────────────────────────────────────
+   Scoped to body.theme-light-dash so it never collides with the
+   marketing `.theme-light` wrapper. Overrides the same custom
+   property names :root declares, so every class built on
+   rgba(var(--gold-rgb) …) re-themes without touching markup.
+   The structural rules below fix values that hardcode a dark
+   backdrop (black drop shadows, white-alpha fills, vignettes,
+   neon text-shadow) — those cannot survive a 1:1 hex swap.
+   ═══════════════════════════════════════════════════════════════ */
+body.theme-light-dash {
+  /* Primary accent moves off gold to a deep sky blue that holds
+     contrast on white; sun yellow is reserved for highlights. */
+  --gold-rgb: 12, 108, 168;
+  --cyan-rgb: 13, 148, 136;
+
+  --bg-void: #DCEEFB;
+  --bg-primary: #EDF6FD;
+  --bg-secondary: #D6E9F8;
+  --bg-tertiary: #C2DDF2;
+  /* Panels keep a sky cast rather than going flat white */
+  --bg-panel: rgba(247, 252, 255, 0.80);
+  --bg-panel-solid: #F2F9FE;
+
+  --gold-primary: #0C6CA8;
+  --gold-light: #3C93CE;
+  --gold-dim: #084C76;
+  --gold-glow: rgba(12, 108, 168, 0.16);
+
+  --cyan-primary: #0D9488;
+  --cyan-dim: #0A6B62;
+  --cyan-glow: rgba(13, 148, 136, 0.14);
+
+  /* Alert hues darkened for legibility against light surfaces */
+  --alert-red: #D92D20;
+  --alert-orange: #C2410C;
+  --alert-green: #067647;
+  --alert-blue: #175CD3;
+
+  --accent-weather: #8B2FC9;
+  --accent-nuclear: #4D7C0F;
+
+  --border-primary: rgba(15, 60, 95, 0.14);
+  --border-secondary: rgba(15, 60, 95, 0.08);
+  --border-active: rgba(12, 108, 168, 0.55);
+  --border-cyan: rgba(13, 148, 136, 0.30);
+
+  --text-primary: #0F2233;
+  --text-secondary: #3F566B;
+  --text-muted: #6C8299;
+  --text-heading: #071726;
+  --text-gold: #0C6CA8;
+  --text-cyan: #0D9488;
+
+  --scrollbar-thumb: rgba(15, 60, 95, 0.22);
+  --scrollbar-thumb-hover: rgba(15, 60, 95, 0.40);
+  --hover-accent: rgba(12, 108, 168, 0.07);
+
+  --rail-bg: linear-gradient(180deg, rgba(255,255,255,0.80), rgba(214,233,248,0.66));
+  --toggle-track-on: rgba(12, 108, 168, 0.22);
+  --toggle-track-off: rgba(15, 60, 95, 0.07);
+  --toggle-edge-on: rgba(12, 108, 168, 0.50);
+  --toggle-edge-off: rgba(15, 60, 95, 0.16);
+  --toggle-knob-on: #0C6CA8;
+  --toggle-knob-off: rgba(15, 60, 95, 0.32);
+  --toggle-knob-shadow: 0 1px 3px rgba(12, 108, 168, 0.40);
+
+  color-scheme: light;
+  color: var(--text-primary);
+
+  /* Atmospheric sky wash — high sky blue falling to cloud white, with a
+     breath of leaf green and low sun warmth at the horizon. The surface
+     should read as daylight, never as flat white. */
+  background:
+    radial-gradient(1200px 620px at 78% -8%, rgba(253, 224, 138, 0.30), transparent 62%),
+    radial-gradient(1000px 560px at 12% 4%, rgba(125, 211, 252, 0.52), transparent 66%),
+    radial-gradient(900px 520px at 50% 108%, rgba(134, 239, 172, 0.26), transparent 68%),
+    linear-gradient(180deg, #CFE8FA 0%, #E4F2FC 42%, #F3FAFE 74%, #EEF8F3 100%);
+  background-attachment: fixed;
+}
+
+/* Base surface — html carries the dark default, so restate it here */
+html:has(body.theme-light-dash) { background: #DCEEFB; color-scheme: light; }
+
+/* ── Panels: sky-tinted glass over the wash, soft blue-grey elevation
+       in place of the dark theme's black drop shadows ── */
+body.theme-light-dash .glass-panel {
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.92) 0%, rgba(232,244,253,0.78) 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 45, 75, 0.06),
+    0 8px 28px rgba(21, 78, 122, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+body.theme-light-dash .glass-panel-sm,
+body.theme-light-dash .glass-panel-interactive {
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.90) 0%, rgba(230,243,253,0.76) 100%);
+}
+body.theme-light-dash .glass-panel:hover { border-color: rgba(12, 108, 168, 0.34); }
+body.theme-light-dash .glass-panel-interactive:hover {
+  box-shadow:
+    0 2px 4px rgba(15, 45, 75, 0.07),
+    0 12px 34px rgba(15, 45, 75, 0.11);
+}
+
+/* ── Glows: neon on void becomes restrained elevation on daylight ── */
+body.theme-light-dash .osiris-glow {
+  box-shadow:
+    0 1px 2px rgba(15, 45, 75, 0.06),
+    0 10px 32px rgba(12, 108, 168, 0.10);
+}
+body.theme-light-dash .osiris-glow-cyan {
+  box-shadow:
+    0 1px 2px rgba(15, 45, 75, 0.06),
+    0 10px 32px rgba(13, 148, 136, 0.10);
+}
+
+/* ── Text glow reads as blur on white; use weight and colour instead ── */
+body.theme-light-dash .stat-value-glow,
+body.theme-light-dash .stat-value-glow:hover,
+body.theme-light-dash .stat-value-glow--cyan,
+body.theme-light-dash .stat-value-glow--cyan:hover,
+body.theme-light-dash .stat-value-glow--alert,
+body.theme-light-dash .risk-critical,
+body.theme-light-dash .risk-high { text-shadow: none; }
+body.theme-light-dash .risk-critical { color: var(--alert-red); font-weight: 600; }
+body.theme-light-dash .risk-high { color: var(--alert-orange); font-weight: 600; }
+body.theme-light-dash .risk-medium { color: #A16207; }
+body.theme-light-dash .risk-low { color: var(--alert-green); }
+
+/* ── Toggles: white-alpha tracks vanish on light, use ink-alpha ── */
+body.theme-light-dash .layer-toggle {
+  background: rgba(15, 60, 95, 0.10);
+  border-color: rgba(15, 60, 95, 0.14);
+}
+body.theme-light-dash .layer-toggle::after { background: #FFFFFF; box-shadow: 0 1px 2px rgba(15,45,75,0.25); }
+body.theme-light-dash .layer-toggle.active { background: rgba(12, 108, 168, 0.20); }
+body.theme-light-dash .layer-toggle.active::after {
+  background: var(--gold-primary);
+  box-shadow: 0 1px 3px rgba(12, 108, 168, 0.45);
+}
+body.theme-light-dash .layer-toggle-premium {
+  background: rgba(15, 60, 95, 0.09);
+  border-color: rgba(15, 60, 95, 0.14);
+}
+
+/* ── Dark-ops atmospherics have no place on the daylight surface ── */
+body.theme-light-dash .vignette { background: none; }
+body.theme-light-dash .crt-scanlines { background: none; }
+
+/* ── Severity tags: tinted chips rather than glowing neon ── */
+body.theme-light-dash .gotham-tag--critical,
+body.theme-light-dash .gotham-tag-critical { background: rgba(217,45,32,0.10); color: var(--alert-red); border-color: rgba(217,45,32,0.28); box-shadow: none; }
+body.theme-light-dash .gotham-tag--high,
+body.theme-light-dash .gotham-tag-high { background: rgba(194,65,12,0.10); color: var(--alert-orange); border-color: rgba(194,65,12,0.28); box-shadow: none; }
+body.theme-light-dash .gotham-tag--medium,
+body.theme-light-dash .gotham-tag-medium { background: rgba(161,98,7,0.10); color: #A16207; border-color: rgba(161,98,7,0.26); }
+body.theme-light-dash .gotham-tag--low,
+body.theme-light-dash .gotham-tag-low { background: rgba(6,118,71,0.10); color: var(--alert-green); border-color: rgba(6,118,71,0.26); }
+
+body.theme-light-dash .threat-badge-critical,
+body.theme-light-dash .threat-badge-high,
+body.theme-light-dash .threat-badge-elevated,
+body.theme-light-dash .threat-badge-nominal { animation: none; }
+
+/* ── Cards ── */
+body.theme-light-dash .gotham-card {
+  box-shadow: 0 1px 2px rgba(15,45,75,0.05), 0 6px 20px rgba(15,45,75,0.07);
+}
+body.theme-light-dash .gotham-card:hover {
+  box-shadow: 0 2px 4px rgba(15,45,75,0.07), 0 10px 28px rgba(15,45,75,0.10);
+}
+
+/* ── Pulsing gold halos become a quiet accent tick ── */
+body.theme-light-dash .animate-glow-pulse { animation: none; box-shadow: 0 0 0 1px rgba(12,108,168,0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-light-dash .animate-osiris-pulse,
+  body.theme-light-dash .animate-data-pulse,
+  body.theme-light-dash .animate-threat-flash,
+  body.theme-light-dash .animate-ticker { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DAYLIGHT — white-on-dark compatibility layer
+   ───────────────────────────────────────────────────────────────
+   Panels predate the light surface and hardcode `text-white/N`,
+   `bg-white/N` and `border-white/N`. White-alpha on a light
+   background is invisible, so remap those utilities to ink-alpha
+   at equivalent hierarchy rather than rewriting every component.
+   Ordered after the utilities so equal specificity resolves here.
+   ═══════════════════════════════════════════════════════════════ */
+body.theme-light-dash .text-white           { color: rgba(15, 34, 51, 0.95); }
+body.theme-light-dash .text-white\/90       { color: rgba(15, 34, 51, 0.92); }
+body.theme-light-dash .text-white\/80       { color: rgba(15, 34, 51, 0.86); }
+body.theme-light-dash .text-white\/70       { color: rgba(15, 34, 51, 0.78); }
+body.theme-light-dash .text-white\/60       { color: rgba(15, 34, 51, 0.70); }
+body.theme-light-dash .text-white\/50       { color: rgba(15, 34, 51, 0.62); }
+body.theme-light-dash .text-white\/40       { color: rgba(15, 34, 51, 0.55); }
+body.theme-light-dash .text-white\/35       { color: rgba(15, 34, 51, 0.50); }
+body.theme-light-dash .text-white\/30       { color: rgba(15, 34, 51, 0.46); }
+body.theme-light-dash .text-white\/25       { color: rgba(15, 34, 51, 0.42); }
+body.theme-light-dash .text-white\/20       { color: rgba(15, 34, 51, 0.38); }
+body.theme-light-dash .text-white\/15       { color: rgba(15, 34, 51, 0.32); }
+body.theme-light-dash .text-white\/10       { color: rgba(15, 34, 51, 0.26); }
+
+body.theme-light-dash .bg-white\/10         { background-color: rgba(15, 60, 95, 0.08); }
+body.theme-light-dash .bg-white\/5          { background-color: rgba(15, 60, 95, 0.05); }
+body.theme-light-dash .bg-white\/\[0\.06\]  { background-color: rgba(15, 60, 95, 0.05); }
+body.theme-light-dash .bg-white\/\[0\.03\]  { background-color: rgba(15, 60, 95, 0.035); }
+
+body.theme-light-dash .border-white\/35       { border-color: rgba(15, 60, 95, 0.28); }
+body.theme-light-dash .border-white\/15       { border-color: rgba(15, 60, 95, 0.16); }
+body.theme-light-dash .border-white\/10       { border-color: rgba(15, 60, 95, 0.12); }
+body.theme-light-dash .border-white\/5        { border-color: rgba(15, 60, 95, 0.07); }
+body.theme-light-dash .border-white\/\[0\.08\]{ border-color: rgba(15, 60, 95, 0.09); }
+body.theme-light-dash .border-white\/\[0\.06\]{ border-color: rgba(15, 60, 95, 0.08); }
+body.theme-light-dash .border-white\/\[0\.04\]{ border-color: rgba(15, 60, 95, 0.06); }
+
+/* Black scrims assume a bright map underneath; soften on daylight */
+body.theme-light-dash .bg-black\/40,
+body.theme-light-dash .bg-black\/50,
+body.theme-light-dash .bg-black\/60,
+body.theme-light-dash .bg-black\/70 { background-color: rgba(240, 247, 252, 0.82); }
+
+/* ═══════════════════════════════════════════════════════════════
+   MARKETING — intelligence domain pages (/intel, /intel/[slug])
+   Information-first: tables, stats and source credits lead; the
+   globe is context, not the product.
+   ═══════════════════════════════════════════════════════════════ */
+.theme-light .tl-section--tight { padding-block: 44px; }
+
+.theme-light .tl-h1 {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5.2vw, 60px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--ink-900);
+  margin: 10px 0 0;
+}
+
+.theme-light .tl-body {
+  max-width: 62ch;
+  color: var(--ink-600);
+  font-size: 15px;
+  line-height: 1.65;
+  margin: 8px 0 0;
+}
+
+.theme-light .tl-breadcrumb { color: var(--sky-700, #0369A1); text-decoration: none; }
+.theme-light .tl-breadcrumb:hover { text-decoration: underline; }
+
+/* ── Domain index grid — deliberately uneven rhythm, not 3 equal cards ── */
+.theme-light .tl-domain-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 26px;
+}
+
+.theme-light .tl-domain-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 20px 18px;
+  border-radius: 16px;
+  text-decoration: none;
+  overflow: hidden;
+  background: linear-gradient(165deg, rgba(255,255,255,0.94), rgba(228,242,252,0.72));
+  border: 1px solid rgba(15, 60, 95, 0.10);
+  box-shadow: 0 1px 2px rgba(15,45,75,0.05), 0 10px 28px rgba(21,78,122,0.07);
+  transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s, border-color 0.35s;
+}
+.theme-light .tl-domain-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(15, 60, 95, 0.18);
+  box-shadow: 0 2px 6px rgba(15,45,75,0.07), 0 18px 44px rgba(21,78,122,0.13);
+}
+.theme-light .tl-domain-rule {
+  position: absolute; inset: 0 0 auto 0; height: 3px;
+}
+.theme-light .tl-domain-name {
+  font-family: var(--font-display);
+  font-size: 21px; letter-spacing: -0.015em; color: var(--ink-900); margin: 4px 0 0;
+}
+.theme-light .tl-domain-summary { color: var(--ink-600); font-size: 13.5px; line-height: 1.55; margin: 0; flex: 1; }
+
+.theme-light .tl-domain-meta { display: flex; gap: 18px; margin: 12px 0 0; }
+.theme-light .tl-domain-meta div { display: flex; flex-direction: column; gap: 2px; }
+.theme-light .tl-domain-meta dt {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-400, #7B93A8);
+}
+.theme-light .tl-domain-meta dd { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.theme-light .tl-domain-cta {
+  margin-top: 12px; font-size: 12.5px; font-weight: 600; color: #0369A1;
+}
+
+/* ── Stat row on a domain page ── */
+.theme-light .tl-stat-row { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 26px; }
+.theme-light .tl-stat { display: flex; flex-direction: column; gap: 3px; }
+.theme-light .tl-stat-value { font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.theme-light .tl-stat-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-400, #7B93A8);
+}
+
+/* ── Data table ── */
+.theme-light .tl-table-wrap {
+  margin-top: 18px; overflow-x: auto; border-radius: 14px;
+  border: 1px solid rgba(15, 60, 95, 0.10);
+  background: linear-gradient(170deg, rgba(255,255,255,0.95), rgba(233,244,253,0.75));
+}
+.theme-light .tl-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 460px; }
+.theme-light .tl-table thead th {
+  text-align: left; padding: 12px 16px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-400, #7B93A8);
+  border-bottom: 1px solid rgba(15, 60, 95, 0.12);
+}
+.theme-light .tl-table tbody th { text-align: left; font-weight: 600; color: var(--ink-900); }
+.theme-light .tl-table tbody th,
+.theme-light .tl-table tbody td { padding: 11px 16px; border-bottom: 1px solid rgba(15, 60, 95, 0.07); }
+.theme-light .tl-table tbody tr:last-child th,
+.theme-light .tl-table tbody tr:last-child td { border-bottom: none; }
+.theme-light .tl-table code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px; color: var(--ink-600);
+  background: rgba(15, 60, 95, 0.055); padding: 2px 6px; border-radius: 5px;
+}
+.theme-light .tl-swatch {
+  display: inline-block; width: 11px; height: 11px; border-radius: 3px;
+  vertical-align: middle; margin-right: 8px; box-shadow: 0 0 0 1px rgba(15,45,75,0.14) inset;
+}
+.theme-light .tl-swatch-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px; color: var(--ink-400, #7B93A8);
+}
+
+/* ── Two-column source / endpoint split ── */
+.theme-light .tl-split { display: grid; gap: 30px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.theme-light .tl-list { margin: 10px 0 0; padding-left: 18px; color: var(--ink-600); font-size: 14px; line-height: 1.85; }
+.theme-light .tl-list--mono code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px; background: rgba(15,60,95,0.055); padding: 2px 7px; border-radius: 5px; color: var(--ink-600);
+}
+
+.theme-light .tl-next-row { display: flex; flex-wrap: wrap; gap: 12px; }
+
+@media (max-width: 640px) {
+  .theme-light .tl-stat-row { gap: 22px; }
+  .theme-light .tl-stat-value { font-size: 27px; }
+}
+
+/* Section headers pair a left-aligned block with a trailing link so the
+   page has an asymmetric rhythm rather than stacked centred blocks. */
+.theme-light .tl-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.theme-light .tl-section-head-cta { flex-shrink: 0; }
+
+/* Domain pages carry a lighter wash of the same sky so they belong to the
+   homepage rather than dropping to flat white. */
+.theme-light .tl-main:has(.tl-domain-grid),
+.theme-light .tl-main:has(.tl-table) {
+  background:
+    radial-gradient(900px 460px at 88% -6%, rgba(253, 224, 138, 0.20), transparent 62%),
+    radial-gradient(820px 440px at 6% 0%, rgba(125, 211, 252, 0.30), transparent 64%),
+    linear-gradient(180deg, #EAF5FD 0%, #F6FBFE 38%, #FFFFFF 100%);
+}

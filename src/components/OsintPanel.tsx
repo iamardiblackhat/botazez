@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, memo } from 'react';
 import { createPortal } from 'react-dom';
+import type { BotazezTheme } from '@/lib/theme';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LocateFixed,
@@ -34,7 +35,7 @@ const TABS = [
   { id: 'sweep', label: 'IP SWEEP', icon: Crosshair, placeholder: 'Enter IP address (e.g. 8.8.8.8)', color: '#FF3D3D' },
 ];
 
-interface OsintPanelProps { isOpen?: boolean; onClose?: () => void; isMobile?: boolean; onSweepVisualize?: (data: any) => void; onScanGeolocate?: (target: string, data: any) => void; theme?: 'core' | 'ghost'; setTheme?: (t: 'core' | 'ghost') => void; }
+interface OsintPanelProps { isOpen?: boolean; onClose?: () => void; isMobile?: boolean; onSweepVisualize?: (data: any) => void; onScanGeolocate?: (target: string, data: any) => void; theme?: BotazezTheme; setTheme?: (t: BotazezTheme) => void; }
 
 function OsintPanelInner({ isMobile, onSweepVisualize, onScanGeolocate }: OsintPanelProps) {
   const [activeTab, setActiveTab] = useState('scanner');

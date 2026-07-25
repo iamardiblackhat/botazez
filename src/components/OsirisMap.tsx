@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, memo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as satellite from 'satellite.js';
+import type { BotazezTheme } from '@/lib/theme';
 
 interface OsirisMapProps {
   data: any;
@@ -18,7 +19,7 @@ interface OsirisMapProps {
   sweepData?: any;
   scanTargets?: any[];
   demoMode?: boolean;
-  theme?: 'core' | 'ghost';
+  theme?: BotazezTheme;
 }
 
 function computeSolarTerminator(): [number, number][] {
@@ -71,7 +72,7 @@ function propagateSatFeature(
   }
 }
 
-function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core' }: OsirisMapProps) {
+function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'light' }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -1738,7 +1739,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     }
   }, [mapReady, mapStyle]);
 
-  const accent = theme === 'ghost' ? '#B388FF' : '#00E5FF';
+  const accent = theme === 'ghost' ? '#B388FF' : theme === 'light' ? '#0C6CA8' : '#00E5FF';
   const speedLabel = satSpeed >= 1 ? `${Math.round(satSpeed)}×` : `${satSpeed}×`;
 
   return (
