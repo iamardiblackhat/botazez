@@ -4,17 +4,19 @@ import { memo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plane, Satellite, Sun, AlertTriangle, Camera,
-  CloudLightning, Ship, Network, Database, Ghost,
+  CloudLightning, Ship, Network, Database,
   Flame, Tv, Radio, Mountain, Anchor, Radar
 } from 'lucide-react';
+import ThemeSwitch from '@/components/ThemeSwitch';
+import type { BotazezTheme } from '@/lib/theme';
 
 interface LayerPanelProps {
   data: any;
   activeLayers: any;
   setActiveLayers: React.Dispatch<React.SetStateAction<any>>;
   isMobile?: boolean;
-  theme?: 'core' | 'ghost';
-  setTheme?: (theme: 'core' | 'ghost') => void;
+  theme?: BotazezTheme;
+  setTheme?: (theme: BotazezTheme) => void;
 }
 
 const LAYER_GROUPS = [
@@ -118,9 +120,8 @@ function ToggleSwitch({ active, onClick }: { active: boolean; onClick: () => voi
       <div
         className="absolute inset-0 rounded-full transition-all duration-300"
         style={{
-          background: active ? 'rgba(255,255,255,0.2)' : 'transparent',
-          border: active ? '1px solid rgba(255,255,255,0.35)' : '1px solid rgba(255,255,255,0.12)',
-          boxShadow: active ? '0 0 8px rgba(255,255,255,0.1)' : 'none',
+          background: active ? 'var(--toggle-track-on)' : 'var(--toggle-track-off)',
+          border: `1px solid ${active ? 'var(--toggle-edge-on)' : 'var(--toggle-edge-off)'}`,
         }}
       />
       <motion.div
@@ -128,8 +129,8 @@ function ToggleSwitch({ active, onClick }: { active: boolean; onClick: () => voi
         style={{
           width: 10,
           height: 10,
-          background: active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.2)',
-          boxShadow: active ? '0 0 6px rgba(255,255,255,0.4)' : 'none',
+          background: active ? 'var(--toggle-knob-on)' : 'var(--toggle-knob-off)',
+          boxShadow: active ? 'var(--toggle-knob-shadow)' : 'none',
         }}
         animate={{ left: active ? 16 : 2 }}
         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
@@ -138,7 +139,7 @@ function ToggleSwitch({ active, onClick }: { active: boolean; onClick: () => voi
   );
 }
 
-function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'core', setTheme }: LayerPanelProps) {
+function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'light', setTheme }: LayerPanelProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
 
   const toggle = (key: string) => setActiveLayers((prev: any) => ({ ...prev, [key]: !prev[key] }));
@@ -193,22 +194,8 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
           </div>
         ))}
 
-        {/* MOBILE GHOST TOGGLE */}
-        {setTheme && (
-          <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/[0.06] px-1">
-            <span className="text-[12px] font-mono tracking-[0.2em] text-white/25 uppercase">Ghost Protocol</span>
-            <button
-              onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
-              style={{
-                background: theme === 'ghost' ? 'rgba(179, 136, 255, 0.15)' : 'transparent',
-                boxShadow: theme === 'ghost' ? '0 0 12px rgba(179, 136, 255, 0.3)' : 'none',
-              }}
-            >
-              <Ghost className="w-4 h-4" style={{ color: theme === 'ghost' ? '#B388FF' : 'rgba(255,255,255,0.25)' }} />
-            </button>
-          </div>
-        )}
+        {/* MOBILE SURFACE SWITCH */}
+        {setTheme && <ThemeSwitch theme={theme} setTheme={setTheme} variant="row" />}
       </div>
     );
   }
@@ -221,7 +208,8 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
       transition={{ type: 'spring', damping: 30, stiffness: 200, delay: 2.8 }}
       className="absolute top-0 left-0 h-full w-[68px] flex flex-col items-center pt-24 pb-6 z-50 pointer-events-auto"
       style={{
-        background: 'rgba(0,0,0,0.15)',
+        background: 'var(--rail-bg)',
+        borderRight: '1px solid var(--border-secondary)',
         backdropFilter: 'blur(24px) saturate(1.2)',
         WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
       }}
@@ -332,33 +320,8 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
       {/* Subtle separator */}
       <div className="w-5 h-px bg-white/[0.06] my-2" />
 
-      {/* Ghost Protocol Toggle */}
-      {setTheme && (
-        <button
-          onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
-          className="w-[60px] py-1.5 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-500 cursor-pointer"
-          style={{
-            background: theme === 'ghost' ? 'rgba(179, 136, 255, 0.1)' : 'transparent',
-          }}
-          title="Ghost Protocol — alternate stealth theme"
-        >
-          <Ghost
-            className="transition-all duration-500"
-            style={{
-              width: 15,
-              height: 15,
-              color: theme === 'ghost' ? '#B388FF' : 'rgba(255,255,255,0.15)',
-              filter: theme === 'ghost' ? 'drop-shadow(0 0 6px rgba(179, 136, 255, 0.5))' : 'none',
-            }}
-          />
-          <span
-            className="font-mono uppercase text-center leading-[1.1]"
-            style={{ fontSize: 7, letterSpacing: '0.03em', color: theme === 'ghost' ? '#B388FF' : 'rgba(255,255,255,0.18)' }}
-          >
-            Ghost
-          </span>
-        </button>
-      )}
+      {/* Surface switcher — Daylight / Core / Ghost */}
+      {setTheme && <ThemeSwitch theme={theme} setTheme={setTheme} />}
     </motion.div>
   );
 }

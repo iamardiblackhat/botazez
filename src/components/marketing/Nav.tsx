@@ -13,7 +13,8 @@ import { Hexagon } from 'lucide-react';
 
 const LINKS = [
   { href: '/', label: 'Home' },
-  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/intel', label: 'Domains' },
+  { href: '/dashboard', label: 'Live Surface' },
   { href: '/ardi', label: 'ARDI' },
 ];
 

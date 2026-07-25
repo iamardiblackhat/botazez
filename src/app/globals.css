@@ -66,6 +66,18 @@
   /* ── Spacing (responsive) ── */
   --panel-gap: 12px;
   --edge-pad: 20px;
+
+  /* ── Dashboard chrome (rail + toggles) ──
+     Declared as tokens so the daylight surface can restate them;
+     white-alpha values are invisible on a light background. */
+  --rail-bg: rgba(0, 0, 0, 0.15);
+  --toggle-track-on: rgba(255, 255, 255, 0.20);
+  --toggle-track-off: transparent;
+  --toggle-edge-on: rgba(255, 255, 255, 0.35);
+  --toggle-edge-off: rgba(255, 255, 255, 0.12);
+  --toggle-knob-on: rgba(255, 255, 255, 0.85);
+  --toggle-knob-off: rgba(255, 255, 255, 0.20);
+  --toggle-knob-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
 }
 
 /* 🔥
@@ -2725,3 +2737,361 @@ a.glass-panel:active { transform: translateY(0); }
   .tl-btn-sun:hover { transform: none; }
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME: DAYLIGHT (DEFAULT) — light monitoring surface
+   ───────────────────────────────────────────────────────────────
+   Scoped to body.theme-light-dash so it never collides with the
+   marketing `.theme-light` wrapper. Overrides the same custom
+   property names :root declares, so every class built on
+   rgba(var(--gold-rgb) …) re-themes without touching markup.
+   The structural rules below fix values that hardcode a dark
+   backdrop (black drop shadows, white-alpha fills, vignettes,
+   neon text-shadow) — those cannot survive a 1:1 hex swap.
+   ═══════════════════════════════════════════════════════════════ */
+body.theme-light-dash {
+  /* Primary accent moves off gold to a deep sky blue that holds
+     contrast on white; sun yellow is reserved for highlights. */
+  --gold-rgb: 12, 108, 168;
+  --cyan-rgb: 13, 148, 136;
+
+  --bg-void: #DCEEFB;
+  --bg-primary: #EDF6FD;
+  --bg-secondary: #D6E9F8;
+  --bg-tertiary: #C2DDF2;
+  /* Panels keep a sky cast rather than going flat white */
+  --bg-panel: rgba(247, 252, 255, 0.80);
+  --bg-panel-solid: #F2F9FE;
+
+  --gold-primary: #0C6CA8;
+  --gold-light: #3C93CE;
+  --gold-dim: #084C76;
+  --gold-glow: rgba(12, 108, 168, 0.16);
+
+  --cyan-primary: #0D9488;
+  --cyan-dim: #0A6B62;
+  --cyan-glow: rgba(13, 148, 136, 0.14);
+
+  /* Alert hues darkened for legibility against light surfaces */
+  --alert-red: #D92D20;
+  --alert-orange: #C2410C;
+  --alert-green: #067647;
+  --alert-blue: #175CD3;
+
+  --accent-weather: #8B2FC9;
+  --accent-nuclear: #4D7C0F;
+
+  --border-primary: rgba(15, 60, 95, 0.14);
+  --border-secondary: rgba(15, 60, 95, 0.08);
+  --border-active: rgba(12, 108, 168, 0.55);
+  --border-cyan: rgba(13, 148, 136, 0.30);
+
+  --text-primary: #0F2233;
+  --text-secondary: #3F566B;
+  --text-muted: #6C8299;
+  --text-heading: #071726;
+  --text-gold: #0C6CA8;
+  --text-cyan: #0D9488;
+
+  --scrollbar-thumb: rgba(15, 60, 95, 0.22);
+  --scrollbar-thumb-hover: rgba(15, 60, 95, 0.40);
+  --hover-accent: rgba(12, 108, 168, 0.07);
+
+  --rail-bg: linear-gradient(180deg, rgba(255,255,255,0.80), rgba(214,233,248,0.66));
+  --toggle-track-on: rgba(12, 108, 168, 0.22);
+  --toggle-track-off: rgba(15, 60, 95, 0.07);
+  --toggle-edge-on: rgba(12, 108, 168, 0.50);
+  --toggle-edge-off: rgba(15, 60, 95, 0.16);
+  --toggle-knob-on: #0C6CA8;
+  --toggle-knob-off: rgba(15, 60, 95, 0.32);
+  --toggle-knob-shadow: 0 1px 3px rgba(12, 108, 168, 0.40);
+
+  color-scheme: light;
+  color: var(--text-primary);
+
+  /* Atmospheric sky wash — high sky blue falling to cloud white, with a
+     breath of leaf green and low sun warmth at the horizon. The surface
+     should read as daylight, never as flat white. */
+  background:
+    radial-gradient(1200px 620px at 78% -8%, rgba(253, 224, 138, 0.30), transparent 62%),
+    radial-gradient(1000px 560px at 12% 4%, rgba(125, 211, 252, 0.52), transparent 66%),
+    radial-gradient(900px 520px at 50% 108%, rgba(134, 239, 172, 0.26), transparent 68%),
+    linear-gradient(180deg, #CFE8FA 0%, #E4F2FC 42%, #F3FAFE 74%, #EEF8F3 100%);
+  background-attachment: fixed;
+}
+
+/* Base surface — html carries the dark default, so restate it here */
+html:has(body.theme-light-dash) { background: #DCEEFB; color-scheme: light; }
+
+/* ── Panels: sky-tinted glass over the wash, soft blue-grey elevation
+       in place of the dark theme's black drop shadows ── */
+body.theme-light-dash .glass-panel {
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.92) 0%, rgba(232,244,253,0.78) 100%);
+  box-shadow:
+    0 1px 2px rgba(15, 45, 75, 0.06),
+    0 8px 28px rgba(21, 78, 122, 0.10),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+body.theme-light-dash .glass-panel-sm,
+body.theme-light-dash .glass-panel-interactive {
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.90) 0%, rgba(230,243,253,0.76) 100%);
+}
+body.theme-light-dash .glass-panel:hover { border-color: rgba(12, 108, 168, 0.34); }
+body.theme-light-dash .glass-panel-interactive:hover {
+  box-shadow:
+    0 2px 4px rgba(15, 45, 75, 0.07),
+    0 12px 34px rgba(15, 45, 75, 0.11);
+}
+
+/* ── Glows: neon on void becomes restrained elevation on daylight ── */
+body.theme-light-dash .osiris-glow {
+  box-shadow:
+    0 1px 2px rgba(15, 45, 75, 0.06),
+    0 10px 32px rgba(12, 108, 168, 0.10);
+}
+body.theme-light-dash .osiris-glow-cyan {
+  box-shadow:
+    0 1px 2px rgba(15, 45, 75, 0.06),
+    0 10px 32px rgba(13, 148, 136, 0.10);
+}
+
+/* ── Text glow reads as blur on white; use weight and colour instead ── */
+body.theme-light-dash .stat-value-glow,
+body.theme-light-dash .stat-value-glow:hover,
+body.theme-light-dash .stat-value-glow--cyan,
+body.theme-light-dash .stat-value-glow--cyan:hover,
+body.theme-light-dash .stat-value-glow--alert,
+body.theme-light-dash .risk-critical,
+body.theme-light-dash .risk-high { text-shadow: none; }
+body.theme-light-dash .risk-critical { color: var(--alert-red); font-weight: 600; }
+body.theme-light-dash .risk-high { color: var(--alert-orange); font-weight: 600; }
+body.theme-light-dash .risk-medium { color: #A16207; }
+body.theme-light-dash .risk-low { color: var(--alert-green); }
+
+/* ── Toggles: white-alpha tracks vanish on light, use ink-alpha ── */
+body.theme-light-dash .layer-toggle {
+  background: rgba(15, 60, 95, 0.10);
+  border-color: rgba(15, 60, 95, 0.14);
+}
+body.theme-light-dash .layer-toggle::after { background: #FFFFFF; box-shadow: 0 1px 2px rgba(15,45,75,0.25); }
+body.theme-light-dash .layer-toggle.active { background: rgba(12, 108, 168, 0.20); }
+body.theme-light-dash .layer-toggle.active::after {
+  background: var(--gold-primary);
+  box-shadow: 0 1px 3px rgba(12, 108, 168, 0.45);
+}
+body.theme-light-dash .layer-toggle-premium {
+  background: rgba(15, 60, 95, 0.09);
+  border-color: rgba(15, 60, 95, 0.14);
+}
+
+/* ── Dark-ops atmospherics have no place on the daylight surface ── */
+body.theme-light-dash .vignette { background: none; }
+body.theme-light-dash .crt-scanlines { background: none; }
+
+/* ── Severity tags: tinted chips rather than glowing neon ── */
+body.theme-light-dash .gotham-tag--critical,
+body.theme-light-dash .gotham-tag-critical { background: rgba(217,45,32,0.10); color: var(--alert-red); border-color: rgba(217,45,32,0.28); box-shadow: none; }
+body.theme-light-dash .gotham-tag--high,
+body.theme-light-dash .gotham-tag-high { background: rgba(194,65,12,0.10); color: var(--alert-orange); border-color: rgba(194,65,12,0.28); box-shadow: none; }
+body.theme-light-dash .gotham-tag--medium,
+body.theme-light-dash .gotham-tag-medium { background: rgba(161,98,7,0.10); color: #A16207; border-color: rgba(161,98,7,0.26); }
+body.theme-light-dash .gotham-tag--low,
+body.theme-light-dash .gotham-tag-low { background: rgba(6,118,71,0.10); color: var(--alert-green); border-color: rgba(6,118,71,0.26); }
+
+body.theme-light-dash .threat-badge-critical,
+body.theme-light-dash .threat-badge-high,
+body.theme-light-dash .threat-badge-elevated,
+body.theme-light-dash .threat-badge-nominal { animation: none; }
+
+/* ── Cards ── */
+body.theme-light-dash .gotham-card {
+  box-shadow: 0 1px 2px rgba(15,45,75,0.05), 0 6px 20px rgba(15,45,75,0.07);
+}
+body.theme-light-dash .gotham-card:hover {
+  box-shadow: 0 2px 4px rgba(15,45,75,0.07), 0 10px 28px rgba(15,45,75,0.10);
+}
+
+/* ── Pulsing gold halos become a quiet accent tick ── */
+body.theme-light-dash .animate-glow-pulse { animation: none; box-shadow: 0 0 0 1px rgba(12,108,168,0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  body.theme-light-dash .animate-osiris-pulse,
+  body.theme-light-dash .animate-data-pulse,
+  body.theme-light-dash .animate-threat-flash,
+  body.theme-light-dash .animate-ticker { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DAYLIGHT — white-on-dark compatibility layer
+   ───────────────────────────────────────────────────────────────
+   Panels predate the light surface and hardcode `text-white/N`,
+   `bg-white/N` and `border-white/N`. White-alpha on a light
+   background is invisible, so remap those utilities to ink-alpha
+   at equivalent hierarchy rather than rewriting every component.
+   Ordered after the utilities so equal specificity resolves here.
+   ═══════════════════════════════════════════════════════════════ */
+body.theme-light-dash .text-white           { color: rgba(15, 34, 51, 0.95); }
+body.theme-light-dash .text-white\/90       { color: rgba(15, 34, 51, 0.92); }
+body.theme-light-dash .text-white\/80       { color: rgba(15, 34, 51, 0.86); }
+body.theme-light-dash .text-white\/70       { color: rgba(15, 34, 51, 0.78); }
+body.theme-light-dash .text-white\/60       { color: rgba(15, 34, 51, 0.70); }
+body.theme-light-dash .text-white\/50       { color: rgba(15, 34, 51, 0.62); }
+body.theme-light-dash .text-white\/40       { color: rgba(15, 34, 51, 0.55); }
+body.theme-light-dash .text-white\/35       { color: rgba(15, 34, 51, 0.50); }
+body.theme-light-dash .text-white\/30       { color: rgba(15, 34, 51, 0.46); }
+body.theme-light-dash .text-white\/25       { color: rgba(15, 34, 51, 0.42); }
+body.theme-light-dash .text-white\/20       { color: rgba(15, 34, 51, 0.38); }
+body.theme-light-dash .text-white\/15       { color: rgba(15, 34, 51, 0.32); }
+body.theme-light-dash .text-white\/10       { color: rgba(15, 34, 51, 0.26); }
+
+body.theme-light-dash .bg-white\/10         { background-color: rgba(15, 60, 95, 0.08); }
+body.theme-light-dash .bg-white\/5          { background-color: rgba(15, 60, 95, 0.05); }
+body.theme-light-dash .bg-white\/\[0\.06\]  { background-color: rgba(15, 60, 95, 0.05); }
+body.theme-light-dash .bg-white\/\[0\.03\]  { background-color: rgba(15, 60, 95, 0.035); }
+
+body.theme-light-dash .border-white\/35       { border-color: rgba(15, 60, 95, 0.28); }
+body.theme-light-dash .border-white\/15       { border-color: rgba(15, 60, 95, 0.16); }
+body.theme-light-dash .border-white\/10       { border-color: rgba(15, 60, 95, 0.12); }
+body.theme-light-dash .border-white\/5        { border-color: rgba(15, 60, 95, 0.07); }
+body.theme-light-dash .border-white\/\[0\.08\]{ border-color: rgba(15, 60, 95, 0.09); }
+body.theme-light-dash .border-white\/\[0\.06\]{ border-color: rgba(15, 60, 95, 0.08); }
+body.theme-light-dash .border-white\/\[0\.04\]{ border-color: rgba(15, 60, 95, 0.06); }
+
+/* Black scrims assume a bright map underneath; soften on daylight */
+body.theme-light-dash .bg-black\/40,
+body.theme-light-dash .bg-black\/50,
+body.theme-light-dash .bg-black\/60,
+body.theme-light-dash .bg-black\/70 { background-color: rgba(240, 247, 252, 0.82); }
+
+/* ═══════════════════════════════════════════════════════════════
+   MARKETING — intelligence domain pages (/intel, /intel/[slug])
+   Information-first: tables, stats and source credits lead; the
+   globe is context, not the product.
+   ═══════════════════════════════════════════════════════════════ */
+.theme-light .tl-section--tight { padding-block: 44px; }
+
+.theme-light .tl-h1 {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 5.2vw, 60px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  color: var(--ink-900);
+  margin: 10px 0 0;
+}
+
+.theme-light .tl-body {
+  max-width: 62ch;
+  color: var(--ink-600);
+  font-size: 15px;
+  line-height: 1.65;
+  margin: 8px 0 0;
+}
+
+.theme-light .tl-breadcrumb { color: var(--sky-700, #0369A1); text-decoration: none; }
+.theme-light .tl-breadcrumb:hover { text-decoration: underline; }
+
+/* ── Domain index grid — deliberately uneven rhythm, not 3 equal cards ── */
+.theme-light .tl-domain-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 26px;
+}
+
+.theme-light .tl-domain-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 20px 18px;
+  border-radius: 16px;
+  text-decoration: none;
+  overflow: hidden;
+  background: linear-gradient(165deg, rgba(255,255,255,0.94), rgba(228,242,252,0.72));
+  border: 1px solid rgba(15, 60, 95, 0.10);
+  box-shadow: 0 1px 2px rgba(15,45,75,0.05), 0 10px 28px rgba(21,78,122,0.07);
+  transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s, border-color 0.35s;
+}
+.theme-light .tl-domain-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(15, 60, 95, 0.18);
+  box-shadow: 0 2px 6px rgba(15,45,75,0.07), 0 18px 44px rgba(21,78,122,0.13);
+}
+.theme-light .tl-domain-rule {
+  position: absolute; inset: 0 0 auto 0; height: 3px;
+}
+.theme-light .tl-domain-name {
+  font-family: var(--font-display);
+  font-size: 21px; letter-spacing: -0.015em; color: var(--ink-900); margin: 4px 0 0;
+}
+.theme-light .tl-domain-summary { color: var(--ink-600); font-size: 13.5px; line-height: 1.55; margin: 0; flex: 1; }
+
+.theme-light .tl-domain-meta { display: flex; gap: 18px; margin: 12px 0 0; }
+.theme-light .tl-domain-meta div { display: flex; flex-direction: column; gap: 2px; }
+.theme-light .tl-domain-meta dt {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-400, #7B93A8);
+}
+.theme-light .tl-domain-meta dd { margin: 0; font-size: 17px; font-weight: 600; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+.theme-light .tl-domain-cta {
+  margin-top: 12px; font-size: 12.5px; font-weight: 600; color: #0369A1;
+}
+
+/* ── Stat row on a domain page ── */
+.theme-light .tl-stat-row { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 26px; }
+.theme-light .tl-stat { display: flex; flex-direction: column; gap: 3px; }
+.theme-light .tl-stat-value { font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.theme-light .tl-stat-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-400, #7B93A8);
+}
+
+/* ── Data table ── */
+.theme-light .tl-table-wrap {
+  margin-top: 18px; overflow-x: auto; border-radius: 14px;
+  border: 1px solid rgba(15, 60, 95, 0.10);
+  background: linear-gradient(170deg, rgba(255,255,255,0.95), rgba(233,244,253,0.75));
+}
+.theme-light .tl-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 460px; }
+.theme-light .tl-table thead th {
+  text-align: left; padding: 12px 16px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-400, #7B93A8);
+  border-bottom: 1px solid rgba(15, 60, 95, 0.12);
+}
+.theme-light .tl-table tbody th { text-align: left; font-weight: 600; color: var(--ink-900); }
+.theme-light .tl-table tbody th,
+.theme-light .tl-table tbody td { padding: 11px 16px; border-bottom: 1px solid rgba(15, 60, 95, 0.07); }
+.theme-light .tl-table tbody tr:last-child th,
+.theme-light .tl-table tbody tr:last-child td { border-bottom: none; }
+.theme-light .tl-table code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px; color: var(--ink-600);
+  background: rgba(15, 60, 95, 0.055); padding: 2px 6px; border-radius: 5px;
+}
+.theme-light .tl-swatch {
+  display: inline-block; width: 11px; height: 11px; border-radius: 3px;
+  vertical-align: middle; margin-right: 8px; box-shadow: 0 0 0 1px rgba(15,45,75,0.14) inset;
+}
+.theme-light .tl-swatch-label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px; color: var(--ink-400, #7B93A8);
+}
+
+/* ── Two-column source / endpoint split ── */
+.theme-light .tl-split { display: grid; gap: 30px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.theme-light .tl-list { margin: 10px 0 0; padding-left: 18px; color: var(--ink-600); font-size: 14px; line-height: 1.85; }
+.theme-light .tl-list--mono code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px; background: rgba(15,60,95,0.055); padding: 2px 7px; border-radius: 5px; color: var(--ink-600);
+}
+
+.theme-light .tl-next-row { display: flex; flex-wrap: wrap; gap: 12px; }
+
+@media (max-width: 640px) {
+  .theme-light .tl-stat-row { gap: 22px; }
+  .theme-light .tl-stat-value { font-size: 27px; }
+}

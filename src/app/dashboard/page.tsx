@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Orbit, Info } from 'lucide-react';
+import { THEME_BODY_CLASS, type BotazezTheme } from '@/lib/theme';
 import IntelFeed from '@/components/IntelFeed';
 import ArdiPanel from '@/components/ArdiPanel';
 import MarketsPanel from '@/components/MarketsPanel';
@@ -17,7 +18,7 @@ import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import GlobalStatusBar from '@/components/GlobalStatusBar';
 import LiveAlerts from '@/components/LiveAlerts';
 
-const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
+const BotazezGlobe = dynamic(() => import('@/components/BotazezGlobe'), { ssr: false });
 const SpaceCanvas = dynamic(() => import('@/components/SpaceCanvas'), { ssr: false });
  const SolarSystemView = dynamic(() => import('@/components/SolarSystemView'), { ssr: false });
 const OceanView = dynamic(() => import('@/components/OceanView'), { ssr: false });
@@ -138,10 +139,12 @@ export default function Dashboard() {
   const [scanTargets, setScanTargets] = useState<any[]>([]);
   const [entityGraphTarget, setEntityGraphTarget] = useState<{ type: string; id: string; label?: string; properties?: Record<string, any> } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
-  const [osirisTheme, setOsirisTheme] = useState<'core'|'ghost'>('core');
+  // Daylight is the default surface; 'core' (gold/void) and 'ghost' (violet)
+  // remain selectable for operators who prefer a dark console.
+  const [osirisTheme, setOsirisTheme] = useState<BotazezTheme>('light');
 
   useEffect(() => {
-    document.body.className = osirisTheme === 'core' ? '' : `theme-${osirisTheme}`;
+    document.body.className = THEME_BODY_CLASS[osirisTheme];
   }, [osirisTheme]);
 
   const isMobile = useIsMobile();
@@ -738,28 +741,21 @@ export default function Dashboard() {
 
 
 
-      {/* ── MAP ── */}
-      <ErrorBoundary name="Map">
-        <OsirisMap 
-          key={osirisTheme}
-          data={data} 
-          activeLayers={activeLayers} 
-          projection={mapProjection} 
-          mapStyle={mapStyle === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : 'dark'} 
-          onEntityClick={handleEntityClick} 
-          onMouseCoords={handleMouseCoords} 
-          onRightClick={handleRightClick} 
-          onViewStateChange={setMapView} 
-          flyToLocation={flyToLocation}
-          sweepData={sweepData}
-          scanTargets={scanTargets}
-          demoMode={demoMode}
+      {/* ── EARTH ──
+          Cesium is the Earth surface: WGS84 globe, streamed terrain and
+          imagery, carrying the OSINT layer set as entities. Scene mode
+          follows the same 3D/2D control the old renderer used. */}
+      <ErrorBoundary name="Globe">
+        <BotazezGlobe
+          data={data}
+          activeLayers={activeLayers}
           theme={osirisTheme}
+          viewMode={mapProjection === 'globe' ? '3D' : '2D'}
+          onEntityClick={handleEntityClick}
+          onMouseCoords={handleMouseCoords}
+          flyToLocation={flyToLocation}
         />
       </ErrorBoundary>
-
-      {/* Isolated cosmic background overlay — decorative only, no data hooks */}
-      <SpaceCanvas />
 
       {/* Click-to-focus solar system explorer — full overlay, only touches
           this one state flag, never the 2D map or the tracking data. */}
@@ -851,8 +847,8 @@ export default function Dashboard() {
         <div className="flex items-center gap-3 w-fit">
           <img src="/ardi-logo.png" alt="BOTAZEZ — ARDI" className="w-9 h-9 md:w-11 md:h-11 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]" />
           <div className="flex flex-col items-start gap-0.5">
-            <h1 className="text-lg md:text-xl font-bold tracking-[0.4em] text-[#D4AF37] font-mono">BOTAZEZ</h1>
-            <span className="text-[11px] md:text-[12px] font-mono tracking-[0.2em] opacity-80 uppercase text-[#D4AF37]">GLOBAL INTELLIGENCE COMMAND</span>
+            <h1 className="text-lg md:text-xl font-bold tracking-[0.4em] text-[var(--gold-primary)] font-mono">BOTAZEZ</h1>
+            <span className="text-[11px] md:text-[12px] font-mono tracking-[0.2em] opacity-80 uppercase text-[var(--text-secondary)]">GLOBAL INTELLIGENCE COMMAND</span>
           </div>
         </div>
         <div className="flex items-center gap-3 mt-1.5 pl-[44px] min-w-0 pr-4">
