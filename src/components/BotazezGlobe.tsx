@@ -28,8 +28,37 @@ interface BotazezGlobeProps {
   viewMode?: GlobeViewMode;
   onEntityClick?: (entity: any) => void;
   onMouseCoords?: (coords: { lat: number; lng: number }) => void;
+  /** Right-click on the globe surface — drives the region-dossier lookup. */
+  onRightClick?: (coords: { lat: number; lng: number }) => void;
+  /** Live camera state, translated to the slippy-map zoom convention
+   * (metersPerPixel = 156543.03392·cos(lat) / 2^zoom) that ScaleBar and
+   * the status HUD already speak, so they don't need to know Cesium
+   * exists. Approximate — derived from camera altitude and FOV, not an
+   * exact equivalent — good enough for a HUD reading and a scale bar. */
+  onViewStateChange?: (vs: { zoom: number; latitude: number }) => void;
   onReady?: (ready: boolean) => void;
   flyToLocation?: { lng: number; lat: number; zoom?: number } | null;
+  /** Sun-based day/night terminator lighting on the globe. Off by default
+   * (a flat-lit globe reads clearer at a glance); on for a literal day/night
+   * view. */
+  nightLighting?: boolean;
+  /** IP sweep result to visualise: a centre point plus discovered devices
+   * arranged around it with connection lines, ported from OsirisMap's
+   * MapLibre implementation. */
+  sweepData?: {
+    center: { lng: number; lat: number };
+    target_ip?: string;
+    devices: Array<{
+      ip: string;
+      device_type?: string;
+      device_color?: string;
+      risk_level?: string;
+      ports?: unknown;
+      hostnames?: unknown;
+    }>;
+  } | null;
+  /** Standalone scan-target markers (no sweep centre/connections). */
+  scanTargets?: Array<{ lng: number; lat: number; [key: string]: unknown }>;
 }
 
 /** Read a lon/lat pair off the heterogeneous OSINT records. */
@@ -53,8 +82,13 @@ function BotazezGlobe({
   viewMode = '3D',
   onEntityClick,
   onMouseCoords,
+  onRightClick,
+  onViewStateChange,
   onReady,
   flyToLocation,
+  nightLighting = false,
+  sweepData = null,
+  scanTargets = [],
 }: BotazezGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
@@ -116,7 +150,7 @@ function BotazezGlobe({
         );
 
         const scene = viewer.scene;
-        scene.globe.enableLighting = false;
+        scene.globe.enableLighting = nightLighting;
         scene.globe.showGroundAtmosphere = true;
         scene.globe.baseColor = Cesium.Color.fromCssColorString('#AFD6EF');
         scene.fog.enabled = true;
@@ -180,6 +214,35 @@ function BotazezGlobe({
           }
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+        handler.setInputAction((click: any) => {
+          const cartesian = viewer.camera.pickEllipsoid(click.position, scene.globe.ellipsoid);
+          if (!cartesian) return;
+          const carto = Cesium.Cartographic.fromCartesian(cartesian);
+          onRightClick?.({
+            lat: Number(Cesium.Math.toDegrees(carto.latitude).toFixed(4)),
+            lng: Number(Cesium.Math.toDegrees(carto.longitude).toFixed(4)),
+          });
+        }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+
+        // Translate camera altitude into the slippy-map zoom convention
+        // ScaleBar/SharePanel/the status HUD already use, so they read a
+        // live value instead of the frozen default. Approximate: derived
+        // from vertical FOV and canvas height, not an exact equivalent.
+        const reportViewState = () => {
+          const carto = scene.camera.positionCartographic;
+          const fovy = (scene.camera.frustum as any).fovy ?? Cesium.Math.PI_OVER_THREE;
+          const canvasHeight = scene.canvas.clientHeight || 900;
+          const metersPerPixel = (2 * carto.height * Math.tan(fovy / 2)) / canvasHeight;
+          const latDeg = Cesium.Math.toDegrees(carto.latitude);
+          const zoom = Math.log2(
+            (156543.03392 * Math.cos(Cesium.Math.toRadians(latDeg))) / Math.max(metersPerPixel, 0.01)
+          );
+          onViewStateChange?.({ zoom: Number(zoom.toFixed(2)), latitude: Number(latDeg.toFixed(4)) });
+        };
+        scene.camera.changed.addEventListener(reportViewState);
+        scene.camera.percentageChanged = 0.05;
+        reportViewState();
+
         setStatus('ready');
         onReady?.(true);
       } catch (err) {
@@ -216,6 +279,123 @@ function BotazezGlobe({
     else if (target === Cesium.SceneMode.COLUMBUS_VIEW) viewer.scene.morphToColumbusView(1.2);
     else viewer.scene.morphTo3D(1.2);
   }, [viewMode, status]);
+
+  /* ── Day/night terminator lighting ──────────────────────────── */
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || status !== 'ready') return;
+    viewer.scene.globe.enableLighting = nightLighting;
+  }, [nightLighting, status]);
+
+  /* ── IP sweep visualisation ──────────────────────────────────
+     Ported from OsirisMap: a pulsing centre marker, devices arranged
+     radially around it, connection lines, camera fly-in. */
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const Cesium = cesiumRef.current;
+    if (!viewer || !Cesium || status !== 'ready') return;
+
+    const key = '__sweep';
+    let source = sourcesRef.current.get(key);
+    if (!sweepData?.devices?.length) {
+      if (source) source.entities.removeAll();
+      return;
+    }
+
+    if (!source) {
+      source = new Cesium.CustomDataSource(key);
+      viewer.dataSources.add(source);
+      sourcesRef.current.set(key, source);
+    }
+    source.entities.removeAll();
+
+    const { center, devices } = sweepData;
+    const centrePos = Cesium.Cartesian3.fromDegrees(center.lng, center.lat, 30);
+
+    source.entities.add({
+      position: centrePos,
+      point: {
+        pixelSize: 14,
+        color: Cesium.Color.fromCssColorString('#38BDF8').withAlpha(0.9),
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+      properties: { ip: sweepData.target_ip, __sweepCentre: true },
+    });
+
+    // Spread devices in a ring around the centre — mirrors the small
+    // lat/lng-radius offset OsirisMap used rather than a fixed metre
+    // radius, so the visual footprint stays consistent at any zoom.
+    devices.forEach((d, i) => {
+      const angle = (i / devices.length) * Math.PI * 2;
+      const radiusDeg = 0.0009 + ((i % 7 + 1) * 0.00035);
+      const lngScale = 1 / Math.cos((center.lat * Math.PI) / 180);
+      const lng = center.lng + Math.cos(angle) * radiusDeg * lngScale;
+      const lat = center.lat + Math.sin(angle) * radiusDeg;
+      const colour = Cesium.Color.fromCssColorString(d.device_color || '#38BDF8');
+      const pos = Cesium.Cartesian3.fromDegrees(lng, lat, 30);
+
+      source.entities.add({
+        polyline: {
+          positions: [centrePos, pos],
+          width: 1.5,
+          material: colour.withAlpha(0.45),
+        },
+      });
+      source.entities.add({
+        position: pos,
+        point: {
+          pixelSize: 8,
+          color: colour.withAlpha(0.92),
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.8),
+          outlineWidth: 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        properties: { ...d, __layer: 'sweep' },
+      });
+    });
+
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(center.lng, center.lat, 2200),
+      orientation: { pitch: Cesium.Math.toRadians(-45) },
+      duration: 3,
+    });
+  }, [sweepData, status]);
+
+  /* ── Standalone scan-target markers ─────────────────────────── */
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const Cesium = cesiumRef.current;
+    if (!viewer || !Cesium || status !== 'ready') return;
+
+    const key = '__scanTargets';
+    let source = sourcesRef.current.get(key);
+    if (!scanTargets.length) {
+      if (source) source.entities.removeAll();
+      return;
+    }
+    if (!source) {
+      source = new Cesium.CustomDataSource(key);
+      viewer.dataSources.add(source);
+      sourcesRef.current.set(key, source);
+    }
+    source.entities.removeAll();
+    for (const t of scanTargets) {
+      if (typeof t.lng !== 'number' || typeof t.lat !== 'number') continue;
+      source.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(t.lng, t.lat, 30),
+        point: {
+          pixelSize: 9,
+          color: Cesium.Color.fromCssColorString('#FBBF24').withAlpha(0.9),
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        properties: { ...t, __layer: 'scan-target' },
+      });
+    }
+  }, [scanTargets, status]);
 
   /* ── OSINT layers → Cesium data sources ─────────────────────── */
   useEffect(() => {

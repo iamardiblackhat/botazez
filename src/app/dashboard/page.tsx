@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Orbit, Info } from 'lucide-react';
+import { Layers, BarChart3, Newspaper, Search, X, Globe, MapPinned, Radar, Sun, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair, Orbit, Info } from 'lucide-react';
 import { THEME_BODY_CLASS, type BotazezTheme } from '@/lib/theme';
 import IntelFeed from '@/components/IntelFeed';
 import ArdiPanel from '@/components/ArdiPanel';
@@ -19,7 +19,6 @@ import GlobalStatusBar from '@/components/GlobalStatusBar';
 import LiveAlerts from '@/components/LiveAlerts';
 
 const BotazezGlobe = dynamic(() => import('@/components/BotazezGlobe'), { ssr: false });
-const SpaceCanvas = dynamic(() => import('@/components/SpaceCanvas'), { ssr: false });
  const SolarSystemView = dynamic(() => import('@/components/SolarSystemView'), { ssr: false });
 const OceanView = dynamic(() => import('@/components/OceanView'), { ssr: false });
 const LayerPanel = dynamic(() => import('@/components/LayerPanel'));
@@ -134,7 +133,8 @@ export default function Dashboard() {
   // the explicit "Solar System View" button below, so it's a deliberate
   // action instead of an accidental one.
 
-  const [mapStyle, setMapStyle] = useState<'dark'|'satellite'>('dark');
+  // Cesium's sun-based day/night terminator lighting on the globe.
+  const [nightLighting, setNightLighting] = useState(false);
   const [sweepData, setSweepData] = useState<any>(null);
   const [scanTargets, setScanTargets] = useState<any[]>([]);
   const [entityGraphTarget, setEntityGraphTarget] = useState<{ type: string; id: string; label?: string; properties?: Record<string, any> } | null>(null);
@@ -753,7 +753,12 @@ export default function Dashboard() {
           viewMode={mapProjection === 'globe' ? '3D' : '2D'}
           onEntityClick={handleEntityClick}
           onMouseCoords={handleMouseCoords}
+          onRightClick={handleRightClick}
+          onViewStateChange={setMapView}
           flyToLocation={flyToLocation}
+          nightLighting={nightLighting}
+          sweepData={sweepData}
+          scanTargets={scanTargets}
         />
       </ErrorBoundary>
 
@@ -793,19 +798,19 @@ export default function Dashboard() {
           </span>
         </button>
 
-        {/* Map Style Toggle */}
+        {/* Day/Night Lighting Toggle */}
         <button
-          onClick={() => setMapStyle(s => s === 'dark' ? 'satellite' : 'dark')}
+          onClick={() => setNightLighting(v => !v)}
           className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
-          title={mapStyle === 'dark' ? 'Satellite View' : 'Night View'}
+          title={nightLighting ? 'Switch to flat daylight' : 'Switch to sun-based day/night lighting'}
         >
-          {mapStyle === 'dark' ? (
-            <Satellite className="w-5 h-5 text-[var(--alert-green)] group-hover:scale-110 transition-transform" />
-          ) : (
+          {nightLighting ? (
             <Moon className="w-5 h-5 text-[var(--cyan-primary)] group-hover:scale-110 transition-transform" />
+          ) : (
+            <Sun className="w-5 h-5 text-[var(--alert-green)] group-hover:scale-110 transition-transform" />
           )}
           <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[12px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
-            {mapStyle === 'dark' ? 'SATELLITE' : 'NIGHT MODE'}
+            {nightLighting ? 'DAYLIGHT' : 'NIGHT MODE'}
           </span>
         </button>
 
