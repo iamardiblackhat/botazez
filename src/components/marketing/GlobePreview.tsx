@@ -67,6 +67,7 @@ export default function GlobePreview() {
         theme="light"
         interactive={false}
         autoRotate
+        initialHeight={9_500_000}
         onReady={() => setReady(true)}
       />
 

@@ -65,6 +65,9 @@ interface BotazezGlobeProps {
   /** Slow continuous spin around the polar axis — pairs with
    * interactive={false} for a living-planet hero visual. */
   autoRotate?: boolean;
+  /** Initial camera altitude in metres. Smaller previews want a closer
+   * default than the dashboard's full-viewport globe. */
+  initialHeight?: number;
 }
 
 /** Read a lon/lat pair off the heterogeneous OSINT records. */
@@ -97,6 +100,7 @@ function BotazezGlobe({
   scanTargets = [],
   interactive = true,
   autoRotate = false,
+  initialHeight = 22_000_000,
 }: BotazezGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
@@ -201,7 +205,7 @@ function BotazezGlobe({
         }
 
         viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(10, 25, 22_000_000),
+          destination: Cesium.Cartesian3.fromDegrees(10, 25, initialHeight),
         });
 
         // Pointer readout
