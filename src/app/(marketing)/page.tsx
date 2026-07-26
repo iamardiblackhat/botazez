@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import FeatureCard from '@/components/marketing/FeatureCard';
+import GlobePreview from '@/components/marketing/GlobePreview';
 
 export const metadata: Metadata = {
   title: 'Botazez — Live Open Source Intelligence',
@@ -55,33 +56,37 @@ export default function HomePage() {
     <>
       {/* ── Hero ── */}
       <section className="tl-hero">
-        <div className="tl-container tl-hero-inner">
-          <span className="tl-eyebrow">Open Source Intelligence</span>
-          <h1>
-            The whole planet,{' '}
-            <span className="tl-gradient-text">one live picture.</span>
-          </h1>
-          <p>
-            Botazez pulls flights, ships, cameras, earthquakes, wildfires, satellites, cyber threats
-            and breaking news out of two dozen public feeds and renders them together on a single
-            GPU-accelerated globe — free and open source.
-          </p>
-          <div className="tl-hero-cta">
-            <Link href="/dashboard" className="tl-btn-primary">
-              <Globe className="w-[18px] h-[18px]" aria-hidden="true" />
-              Launch Dashboard
-            </Link>
-            <Link href="/ardi" className="tl-btn-ghost">
-              <ShieldCheck className="w-[18px] h-[18px]" aria-hidden="true" />
-              Meet ARDI
-            </Link>
+        <div className="tl-container tl-hero-grid">
+          <div className="tl-hero-inner">
+            <span className="tl-eyebrow">Open Source Intelligence</span>
+            <h1>
+              The whole planet,{' '}
+              <span className="tl-gradient-text">one live picture.</span>
+            </h1>
+            <p>
+              Botazez pulls flights, ships, cameras, earthquakes, wildfires, satellites, cyber threats
+              and breaking news out of two dozen public feeds and renders them together on a single
+              GPU-accelerated globe — free and open source. That&rsquo;s it, spinning opposite —
+              live right now, not a mock-up.
+            </p>
+            <div className="tl-hero-cta">
+              <Link href="/dashboard" className="tl-btn-primary">
+                <Globe className="w-[18px] h-[18px]" aria-hidden="true" />
+                Launch Dashboard
+              </Link>
+              <Link href="/ardi" className="tl-btn-ghost">
+                <ShieldCheck className="w-[18px] h-[18px]" aria-hidden="true" />
+                Meet ARDI
+              </Link>
+            </div>
+            <div className="tl-hero-stats">
+              <span>11 intel domains</span>
+              <span>20+ live feeds</span>
+              <span>WebGL rendered</span>
+              <span>MIT licensed</span>
+            </div>
           </div>
-          <div className="tl-hero-stats">
-            <span>11 intel domains</span>
-            <span>20+ live feeds</span>
-            <span>WebGL rendered</span>
-            <span>MIT licensed</span>
-          </div>
+          <GlobePreview />
         </div>
       </section>
 

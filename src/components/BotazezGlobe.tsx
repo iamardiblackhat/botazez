@@ -59,6 +59,12 @@ interface BotazezGlobeProps {
   } | null;
   /** Standalone scan-target markers (no sweep centre/connections). */
   scanTargets?: Array<{ lng: number; lat: number; [key: string]: unknown }>;
+  /** Disable drag/zoom/rotate input — for ambient, look-don't-touch
+   * placements like the homepage hero preview. Read once at mount. */
+  interactive?: boolean;
+  /** Slow continuous spin around the polar axis — pairs with
+   * interactive={false} for a living-planet hero visual. */
+  autoRotate?: boolean;
 }
 
 /** Read a lon/lat pair off the heterogeneous OSINT records. */
@@ -89,6 +95,8 @@ function BotazezGlobe({
   nightLighting = false,
   sweepData = null,
   scanTargets = [],
+  interactive = true,
+  autoRotate = false,
 }: BotazezGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
@@ -169,6 +177,7 @@ function BotazezGlobe({
         // Depth testing keeps entities pinned to terrain instead of
         // floating through mountains once terrain is streaming.
         scene.globe.depthTestAgainstTerrain = false;
+        scene.screenSpaceCameraController.enableInputs = interactive;
 
         // Upgrade to ion terrain + world imagery when a token is present.
         if (hasIon) {
@@ -279,6 +288,16 @@ function BotazezGlobe({
     else if (target === Cesium.SceneMode.COLUMBUS_VIEW) viewer.scene.morphToColumbusView(1.2);
     else viewer.scene.morphTo3D(1.2);
   }, [viewMode, status]);
+
+  /* ── Ambient auto-rotate (hero previews, look-don't-touch) ────── */
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const Cesium = cesiumRef.current;
+    if (!viewer || !Cesium || status !== 'ready' || !autoRotate) return;
+    const tick = () => viewer.scene.camera.rotate(Cesium.Cartesian3.UNIT_Z, -0.00012);
+    viewer.clock.onTick.addEventListener(tick);
+    return () => viewer.clock.onTick.removeEventListener(tick);
+  }, [autoRotate, status]);
 
   /* ── Day/night terminator lighting ──────────────────────────── */
   useEffect(() => {
