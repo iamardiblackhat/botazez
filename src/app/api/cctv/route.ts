@@ -22,6 +22,7 @@ import { fetchSwitzerlandCameras } from './switzerland';
 import { fetchFinlandCameras } from './finland';
 import { fetchHongKongCameras } from './hongkong';
 import { fetchUtahCameras } from './utah';
+import { fetchLouisianaCameras } from './louisiana';
 
 /**
  * OSIRIS — Worldwide CCTV Camera API v2
@@ -427,6 +428,7 @@ const REGION_FETCHERS: Record<string, () => Promise<any[]>> = {
   'finland': fetchFinlandCameras,
   'hongkong': fetchHongKongCameras,
   'utah': fetchUtahCameras,
+  'louisiana': fetchLouisianaCameras,
 };
 
 // Determine which regions to fetch based on viewport bounds
@@ -440,6 +442,8 @@ function getRegionsForBounds(lat: number, lng: number, radius: number): string[]
   if (lat > 24 && lat < 49 && lng > -125 && lng < -100) regions.push('us-west');
   // Utah (UDOT) — explicit, since us-west only covers WA + CA
   if (lat > 36.9 && lat < 42.1 && lng > -114.2 && lng < -108.9) regions.push('utah');
+  // Louisiana (511LA) — explicit, since us-central/us-east don't cover its longitude band
+  if (lat > 28.9 && lat < 33.1 && lng > -94.1 && lng < -88.7) regions.push('louisiana');
   // US-Central
   if (lat > 24 && lat < 49 && lng > -105 && lng < -80) regions.push('us-central');
   // Canada
@@ -525,18 +529,28 @@ export async function GET(request: Request) {
 
     const allCameras: any[] = [];
     const sources: Record<string, number> = {};
+    const regionStatus: Record<string, { ok: boolean; count: number; error?: string }> = {};
 
-    for (const result of results) {
+    results.forEach((result, i) => {
+      const region = regionsToFetch[i];
       if (result.status === 'fulfilled') {
         for (const cam of result.value) {
           allCameras.push(cam);
           sources[cam.source] = (sources[cam.source] || 0) + 1;
         }
+        regionStatus[region] = { ok: result.value.length > 0, count: result.value.length };
+        if (result.value.length === 0) {
+          console.warn(`[cctv] region "${region}" returned 0 cameras`);
+        }
+      } else {
+        const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        regionStatus[region] = { ok: false, count: 0, error: message };
+        console.warn(`[cctv] region "${region}" failed:`, message);
       }
-    }
+    });
 
-    const cacheControl = allCameras.length < 50 
-      ? 'no-store, max-age=0' 
+    const cacheControl = allCameras.length < 50
+      ? 'no-store, max-age=0'
       : 'public, s-maxage=300, stale-while-revalidate=600';
 
     return NextResponse.json({
@@ -544,6 +558,7 @@ export async function GET(request: Request) {
       total: allCameras.length,
       sources,
       regions: regionsToFetch,
+      regionStatus,
       timestamp: new Date().toISOString(),
     }, {
       headers: { 'Cache-Control': cacheControl },

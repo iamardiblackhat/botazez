@@ -64,8 +64,8 @@
 
   /* ── Fonts ── */
   --font-hud: 'JetBrains Mono', 'Courier New', monospace;
-  --font-body: 'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Instrument Sans', -apple-system, sans-serif;
+  --font-body: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Clash Display', 'Satoshi', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* ── Spacing (responsive) ── */
@@ -2362,7 +2362,19 @@ a.glass-panel:active { transform: translateY(0); }
   --gradient-sun: linear-gradient(135deg, var(--sun-300), var(--sun-500));
   --gradient-soft: linear-gradient(160deg, #FFFFFF 0%, #F4FBFF 55%, #F2FDF6 100%);
 
-  background: var(--cloud-white);
+  /* Continuous daylight wash for the whole marketing surface, so the
+     gradient carries on past the hero instead of dropping to flat white.
+     Scoped to .theme-light — the dashboard uses its own theme and never
+     inherits this. */
+  background: linear-gradient(
+    180deg,
+    #e8f4fd 0%,
+    #f0f8f0 35%,
+    #fafff5 60%,
+    #fffef5 85%,
+    #ffffff 100%
+  );
+  background-attachment: fixed;
   color: var(--ink-900);
   color-scheme: light;
   font-family: var(--font-body);
@@ -2428,6 +2440,7 @@ a.glass-panel:active { transform: translateY(0); }
 .tl-eyebrow::after { right: -6px; border-right: 1px solid var(--sky-500); }
 
 .tl-h2 {
+  font-family: var(--font-display);
   font-size: clamp(26px, 4vw, 38px);
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -3104,8 +3117,16 @@ body.theme-light-dash .bg-black\/70 { background-color: rgba(240, 247, 252, 0.82
 .theme-light .tl-domain-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   margin-top: 26px;
+}
+/* First card leads the grid — spans two columns on desktop. */
+.theme-light .tl-domain-grid > .tl-domain-card:first-child {
+  grid-column: span 2;
+}
+@media (max-width: 720px) {
+  .theme-light .tl-domain-grid { grid-template-columns: 1fr; }
+  .theme-light .tl-domain-grid > .tl-domain-card:first-child { grid-column: auto; }
 }
 
 .theme-light .tl-domain-card {
@@ -3113,22 +3134,34 @@ body.theme-light-dash .bg-black\/70 { background-color: rgba(240, 247, 252, 0.82
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 22px 20px 18px;
+  padding: 30px 28px 26px;
   border-radius: 4px;
   text-decoration: none;
   overflow: hidden;
-  background: linear-gradient(165deg, rgba(255,255,255,0.94), rgba(228,242,252,0.72));
+  /* Per-domain accent tint (~5%) over the base sky glass, driven by the
+     --card-accent custom property set per card in the markup. */
+  background:
+    linear-gradient(165deg, color-mix(in srgb, var(--card-accent, #0C6CA8) 6%, transparent), transparent 62%),
+    linear-gradient(165deg, rgba(255,255,255,0.94), rgba(228,242,252,0.72));
   border: 1px solid rgba(15, 60, 95, 0.10);
   box-shadow: 0 1px 2px rgba(15,45,75,0.05), 0 10px 28px rgba(21,78,122,0.07);
-  transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s, border-color 0.35s;
+  transition: transform 200ms cubic-bezier(0.16,1,0.3,1), box-shadow 200ms cubic-bezier(0.16,1,0.3,1), border-color 200ms;
+}
+/* Accent presence is a vertical line inside the left edge, not a top border. */
+.theme-light .tl-domain-card::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 3px;
+  height: 40px;
+  border-radius: 3px;
+  background: var(--card-accent, #0C6CA8);
 }
 .theme-light .tl-domain-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: rgba(15, 60, 95, 0.18);
-  box-shadow: 0 2px 6px rgba(15,45,75,0.07), 0 18px 44px rgba(21,78,122,0.13);
-}
-.theme-light .tl-domain-rule {
-  position: absolute; inset: 0 0 auto 0; height: 3px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
 }
 .theme-light .tl-domain-name {
   font-family: var(--font-display);

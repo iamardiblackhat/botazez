@@ -31,8 +31,12 @@ export default function IntelIndexPage() {
           {DOMAINS.map(domain => {
             const layers = layersFor(domain);
             return (
-              <Link key={domain.slug} href={`/intel/${domain.slug}`} className="tl-domain-card">
-                <span className="tl-domain-rule" style={{ background: domain.accent }} />
+              <Link
+                key={domain.slug}
+                href={`/intel/${domain.slug}`}
+                className="tl-domain-card"
+                style={{ ['--card-accent' as string]: domain.accent } as React.CSSProperties}
+              >
                 <h2 className="tl-domain-name">{domain.name}</h2>
                 <p className="tl-domain-summary">{domain.summary}</p>
                 <dl className="tl-domain-meta">

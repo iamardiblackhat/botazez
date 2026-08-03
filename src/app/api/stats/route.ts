@@ -20,13 +20,15 @@ export async function GET(req: Request) {
     const origin = new URL(req.url).origin;
 
     // Fetch all internal APIs in parallel (they have their own Cache-Control TTLs)
-    const [flightsRes, satsRes, cctvRes, weatherRes, infraRes, gdeltRes] = await Promise.allSettled([
+    const [flightsRes, satsRes, cctvRes, weatherRes, infraRes, gdeltRes, maritimeRes, malwareRes] = await Promise.allSettled([
       fetch(`${origin}/api/flights`, { next: { revalidate: 45 } }),
       fetch(`${origin}/api/satellites`, { next: { revalidate: 3600 } }),
       fetch(`${origin}/api/cctv`, { next: { revalidate: 3600 } }),
       fetch(`${origin}/api/weather`, { next: { revalidate: 300 } }),
       fetch(`${origin}/api/infrastructure`, { next: { revalidate: 86400 } }),
-      fetch(`${origin}/api/gdelt`, { next: { revalidate: 300 } })
+      fetch(`${origin}/api/gdelt`, { next: { revalidate: 300 } }),
+      fetch(`${origin}/api/maritime`, { next: { revalidate: 60 } }),
+      fetch(`${origin}/api/malware`, { next: { revalidate: 300 } }),
     ]);
 
     let flights = 0;
@@ -35,6 +37,8 @@ export async function GET(req: Request) {
     let weather = 0;
     let nuclear = 0;
     let incidents = 0;
+    let maritime = 0;
+    let malware = 0;
 
     // Safely parse counts
     if (flightsRes.status === 'fulfilled' && flightsRes.value.ok) {
@@ -70,6 +74,16 @@ export async function GET(req: Request) {
         incidents = data.gdelt?.length || 0;
     }
 
+    if (maritimeRes.status === 'fulfilled' && maritimeRes.value.ok) {
+      const data = await maritimeRes.value.json();
+      maritime = data.total_ships || data.ships?.length || 0;
+    }
+
+    if (malwareRes.status === 'fulfilled' && malwareRes.value.ok) {
+      const data = await malwareRes.value.json();
+      malware = data.total || data.threats?.length || 0;
+    }
+
     return NextResponse.json({
       stats: {
         flights,
@@ -77,7 +91,9 @@ export async function GET(req: Request) {
         cctv,
         weather,
         nuclear,
-        incidents
+        incidents,
+        maritime,
+        malware,
       },
       timestamp: new Date().toISOString()
     }, {
