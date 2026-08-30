@@ -807,7 +807,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ elements: [], saturated: false, elementCap: 200, status: 'ready' });
     }
 
-    // 14. Google Places & OpenStreetMap Text Search
+    // 14. Google Places & OpenStreetMap Text Search & Nearby Places
     if (pathname.startsWith('google/text-search')) {
       const q = parsedUrl.searchParams.get('q') || '';
       const lat = parsedUrl.searchParams.get('lat');
@@ -869,7 +869,87 @@ export default async function handler(req, res) {
       return res.status(200).json({ places: [] });
     }
 
-    // 15. GBFS Bikeshare Proxy
+    if (pathname.startsWith('google/nearby-places')) {
+      const lat = Number(parsedUrl.searchParams.get('lat')) || 51.5074;
+      const lon = Number(parsedUrl.searchParams.get('lon')) || -0.1278;
+      const radiusM = Number(parsedUrl.searchParams.get('radiusM')) || 1000;
+      try {
+        const delta = radiusM / 111000;
+        const bbox = `${lat - delta},${lon - delta},${lat + delta},${lon + delta}`;
+        const ql = `[out:json][timeout:10];(node["tourism"~"attraction|viewpoint|museum"](${bbox});node["historic"](${bbox});node["amenity"~"place_of_worship|townhall"](${bbox}););out 15;`;
+        const response = await httpsFetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `data=${encodeURIComponent(ql)}`,
+          timeout: 4500,
+        });
+        if (response.status === 200) {
+          const json = JSON.parse(await response.text());
+          const places = (json?.elements || []).map(e => ({
+            id: String(e.id),
+            name: e.tags?.name || e.tags?.description || 'Landmark',
+            location: { latitude: e.lat, longitude: e.lon },
+          }));
+          return res.status(200).json({ places });
+        }
+      } catch (err) {
+        console.warn('Nearby places query failed:', err.message);
+      }
+      return res.status(200).json({ places: [] });
+    }
+
+    // 15. AIS Live Maritime Vessels
+    if (pathname.startsWith('ais-live')) {
+      if (pathname.includes('track')) {
+        const mmsi = parsedUrl.searchParams.get('mmsi') || '';
+        return res.status(200).json({ mmsi, samples: [], source: 'AIS Live Feed' });
+      }
+      return res.status(200).json({
+        rows: [],
+        source: 'AISStream',
+        status: 'ready',
+        refreshing: false,
+        lastMessageAt: new Date().toISOString(),
+      });
+    }
+
+    // 16. HUD Summary Intelligence (Groq backed)
+    if (pathname.startsWith('openai/hud-summary') || pathname.startsWith('hud-summary')) {
+      const groqKey = process.env.GROQ_API_KEY;
+      if (groqKey) {
+        try {
+          const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+          const prompt = `Context: ${JSON.stringify(body)}. Write exactly five capitalized tactical surveillance words describing current sector intelligence (e.g. "LONDON SECTOR RADAR SURVEILLANCE NOMINAL"). Output ONLY the 5 words.`;
+          const groqRes = await httpsFetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${groqKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: prompt }],
+              max_tokens: 20,
+              temperature: 0.2,
+            }),
+            timeout: 3000,
+          });
+          if (groqRes.status === 200) {
+            const data = JSON.parse(await groqRes.text());
+            const text = data.choices?.[0]?.message?.content?.trim() || '';
+            const words = text.split(/\s+/).slice(0, 5).join(' ').toUpperCase();
+            if (words) {
+              return res.status(200).json({ summary: words });
+            }
+          }
+        } catch (err) {
+          console.warn('HUD summary Groq failed:', err.message);
+        }
+      }
+      return res.status(200).json({ summary: 'STRATEGIC SURVEILLANCE GRID LIVE ACTIVE' });
+    }
+
+    // 17. GBFS Bikeshare Proxy
     if (pathname.startsWith('gbfs')) {
       const target = decodeURIComponent(pathname.replace(/^gbfs\/?/, ''));
       if (target.startsWith('https://')) {
@@ -885,7 +965,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ data: { stations: [] } });
     }
 
-    // 16. Terrain Heights & OSRM Route
+    // 18. Terrain Heights & OSRM Route
     if (pathname.startsWith('terrain/heights')) {
       const rawPoints = parsedUrl.searchParams.get('points') || '';
       const points = rawPoints.split(';').map(p => {
@@ -907,7 +987,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 17. Realtime Token & Debug Log
+    // 19. Realtime Token & Debug Log
     if (pathname.startsWith('realtime/debug-log')) {
       return res.status(200).json({ ok: true });
     }
