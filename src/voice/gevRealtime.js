@@ -507,10 +507,97 @@ export class GevRealtimeController {
       const diagnostics = this.connectionDiagnostics();
       this.stop({ preserveStatus: true });
       if (String(error?.message || '').includes('OPENAI_API_KEY')) {
-        this.setStatus('idle', 'VOICE STANDBY');
+        this.startGroqVoice();
         return;
       }
       this.reportError('Realtime connection', error, diagnostics);
+    }
+  }
+
+  startGroqVoice() {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRec) {
+      this.setStatus('idle', 'VOICE STANDBY');
+      return;
+    }
+
+    try {
+      if (this.groqRec) {
+        this.groqRec.abort();
+      }
+      const recognition = new SpeechRec();
+      this.groqRec = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      this.setStatus('listening', 'ARDI Listening · Speak a command');
+      this.setVoiceSpeaker('user');
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (!transcript) return;
+
+        this.setStatus('executing', `"${transcript}"`);
+        this.setVoiceSpeaker('assistant');
+
+        try {
+          const res = await fetch('/api/groq/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: transcript }),
+          });
+          const data = await res.json();
+          const reply = data?.reply || 'Command processed.';
+
+          // Check for navigation commands
+          const lower = transcript.toLowerCase();
+          if (lower.includes('fly to') || lower.includes('go to') || lower.includes('show me') || lower.includes('take me to')) {
+            const dest = lower.replace(/^(fly to|go to|show me|take me to)/i, '').trim();
+            if (dest && this.runner) {
+              this.runner.executeToolCall?.('searchAndFlyTo', { query: dest });
+            }
+          } else if (lower.includes('thermal') && this.runner) {
+            this.runner.executeToolCall?.('setStyle', { style: 'thermal' });
+          } else if (lower.includes('surveillance') && this.runner) {
+            this.runner.executeToolCall?.('setStyle', { style: 'surveillance' });
+          } else if (lower.includes('normal') && this.runner) {
+            this.runner.executeToolCall?.('setStyle', { style: 'normal' });
+          }
+
+          this.setStatus('listening', reply);
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(reply);
+            utterance.rate = 1.05;
+            window.speechSynthesis.speak(utterance);
+          }
+        } catch (err) {
+          console.error('Groq voice processing failed:', err);
+        } finally {
+          setTimeout(() => {
+            if (this.status !== 'idle') this.setStatus('idle', 'VOICE STANDBY');
+          }, 4000);
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.warn('Speech recognition error:', e.error);
+        this.setStatus('idle', 'VOICE STANDBY');
+      };
+
+      recognition.onend = () => {
+        if (this.status === 'listening' || this.status === 'executing') {
+          setTimeout(() => {
+            if (this.status !== 'idle') this.setStatus('idle', 'VOICE STANDBY');
+          }, 2000);
+        }
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('Recognition start exception:', err);
+      this.setStatus('idle', 'VOICE STANDBY');
     }
   }
 
