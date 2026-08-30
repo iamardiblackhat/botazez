@@ -393,6 +393,10 @@ function initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager })
   };
 
   const doQuickScene = () => {
+    if (sceneDirector?._running) {
+      sceneDirector.stopScene('Stopped by user');
+      return;
+    }
     const scenePanel = document.getElementById('scene-panel');
     if (scenePanel) {
       scenePanel.classList.remove('collapsed');
@@ -417,10 +421,22 @@ function initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager })
   };
 
   // Wire buttons
-  document.getElementById('nav-zoom-in-btn')?.addEventListener('click', () => doZoom(1));
-  document.getElementById('nav-zoom-out-btn')?.addEventListener('click', () => doZoom(-1));
-  document.getElementById('nav-reset-north-btn')?.addEventListener('click', doResetNorth);
-  document.getElementById('nav-tilt-btn')?.addEventListener('click', doToggleTilt);
+  document.getElementById('nav-zoom-in-btn')?.addEventListener('click', () => {
+    if (sceneDirector?._running) sceneDirector.stopScene('Navigation override');
+    doZoom(1);
+  });
+  document.getElementById('nav-zoom-out-btn')?.addEventListener('click', () => {
+    if (sceneDirector?._running) sceneDirector.stopScene('Navigation override');
+    doZoom(-1);
+  });
+  document.getElementById('nav-reset-north-btn')?.addEventListener('click', () => {
+    if (sceneDirector?._running) sceneDirector.stopScene('Navigation override');
+    doResetNorth();
+  });
+  document.getElementById('nav-tilt-btn')?.addEventListener('click', () => {
+    if (sceneDirector?._running) sceneDirector.stopScene('Navigation override');
+    doToggleTilt();
+  });
   document.getElementById('nav-scenes-quick-btn')?.addEventListener('click', doQuickScene);
   document.getElementById('nav-cctv-quick-btn')?.addEventListener('click', doQuickCctv);
 
@@ -428,7 +444,11 @@ function initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager })
   window.addEventListener('keydown', (e) => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
 
-    if (e.key === '+' || e.key === '=' || e.key === 'PageUp' || e.key === 'z' || e.key === 'Z') {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      if (sceneDirector?._running) {
+        sceneDirector.stopScene('Stopped (Esc)');
+      }
+    } else if (e.key === '+' || e.key === '=' || e.key === 'PageUp' || e.key === 'z' || e.key === 'Z') {
       e.preventDefault();
       doZoom(1);
     } else if (e.key === '-' || e.key === '_' || e.key === 'PageDown' || e.key === 'x' || e.key === 'X') {
@@ -438,6 +458,8 @@ function initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager })
       doResetNorth();
     } else if (e.key === 't' || e.key === 'T') {
       doToggleTilt();
+    } else if (e.key === 's' || e.key === 'S') {
+      doQuickScene();
     }
   });
 }

@@ -900,11 +900,18 @@ export class SceneDirector {
     this._loadAbort = null;
     this._loadGeneration++;
 
+    // Save previous user visual state so we can cleanly restore upon finish/stop
+    this._preSceneVisual = typeof this.styleManager?.getVisualState === 'function' ? this.styleManager.getVisualState() : null;
+    this._preSceneStyle = this.styleManager?.activeStyle || 'normal';
+
     // Transition to running state
     this._running = true;
     document.body.classList.add('scene-playback-mode');
     this._setButtons(true);
     this._setProgress(0);
+
+    const activeSceneObj = this._project.scenes.find((s) => s.id === (sceneId || this._selectedSceneId)) || this._project.scenes[0];
+    this._showPlaybackOverlay(activeSceneObj?.title || 'Cinematic Scene');
 
     // Create a cancellation token shared across async steps. Held in a local
     // as well: _finishRun() clears this._runToken, so the loop must not read
@@ -1039,7 +1046,9 @@ export class SceneDirector {
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
     this._runAbort?.abort();
-    this.viewer.camera.cancelFlight();
+    try {
+      this.viewer.camera.cancelFlight();
+    } catch {}
     this._updateStatus(reason);
     this._logEvent('scene_stopped', { reason });
   }
@@ -1285,7 +1294,7 @@ export class SceneDirector {
   /**
    * Clean up after a scene run (whether completed, errored, or cancelled).
    * Stops the progress ticker, exits recording mode, finalizes telemetry,
-   * and resets UI buttons to the idle state.
+   * restores user visual settings, and resets UI buttons to the idle state.
    */
   _finishRun() {
     clearInterval(this._progressTimer);
@@ -1296,10 +1305,33 @@ export class SceneDirector {
     this._runAbort?.abort();
     this._runAbort = null;
 
+    try {
+      this.viewer?.camera?.cancelFlight();
+    } catch {}
+
     this.styleManager.setRecordingMode(false);
     document.body.classList.remove('scene-playback-mode');
     this._updateRuntime('');
     this._running = false;
+
+    // Restore the user's previous visual state or reset cleanly to normal style
+    try {
+      if (this._preSceneVisual) {
+        this.styleManager?.applyVisualState?.(this._preSceneVisual);
+        if (this._preSceneVisual.style) {
+          this.styleManager?.setStyle?.(this._preSceneVisual.style);
+        }
+      } else {
+        this.styleManager?.setStyle?.('normal');
+      }
+    } catch (e) {
+      console.warn('[Scenes] Failed to restore visual state:', e);
+      try {
+        this.styleManager?.setStyle?.('normal');
+      } catch {}
+    }
+
+    this._hidePlaybackOverlay();
 
     // Finalize telemetry and archive it for download
     if (this._activeRun) {
@@ -1312,6 +1344,72 @@ export class SceneDirector {
 
     this._runToken = null;
     this._setButtons(false);
+  }
+
+  /** Display prominent floating stop pill overlay during scene playback */
+  _showPlaybackOverlay(sceneTitle = 'Cinematic Scene') {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    try {
+      let overlay = document.getElementById('scene-playback-overlay');
+      if (!overlay && typeof document.createElement === 'function' && document.body) {
+        overlay = document.createElement('div');
+        overlay.id = 'scene-playback-overlay';
+        overlay.className = 'scene-playback-overlay';
+        overlay.innerHTML = `
+          <div class="scene-playback-pill">
+            <span class="scene-playback-beacon"></span>
+            <span class="scene-playback-title">SCENE PLAYING: <b id="scene-playback-name"></b></span>
+            <button id="scene-playback-stop-action" class="scene-playback-stop-btn" type="button" title="Stop Scene and Return to Normal (Esc)">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              <span>STOP SCENE (ESC)</span>
+            </button>
+          </div>
+        `;
+        document.body.appendChild?.(overlay);
+
+        const stopBtn = (typeof overlay.querySelector === 'function' ? overlay.querySelector('#scene-playback-stop-action') : null) || document.getElementById('scene-playback-stop-action');
+        stopBtn?.addEventListener?.('click', (e) => {
+          e?.stopPropagation?.();
+          this.stopScene('Stopped by user');
+        });
+      }
+
+      if (overlay) {
+        const nameEl = (typeof overlay.querySelector === 'function' ? overlay.querySelector('#scene-playback-name') : null) || document.getElementById('scene-playback-name');
+        if (nameEl) nameEl.textContent = sceneTitle;
+        if (overlay.style) overlay.style.display = 'flex';
+      }
+
+      const quickBtn = document.getElementById('nav-scenes-quick-btn');
+      if (quickBtn) {
+        quickBtn.classList?.add?.('scene-running-active');
+        quickBtn.title = 'Click to Stop Scene and Return to Normal (Esc)';
+        quickBtn.innerHTML = `
+          <span class="hud-nav-icon" style="color:#ff4444;font-size:16px;">⏹</span>
+          <span class="hud-nav-sub" style="color:#ff6666;font-weight:700;">STOP</span>
+        `;
+      }
+    } catch {}
+  }
+
+  /** Hide floating stop pill overlay */
+  _hidePlaybackOverlay() {
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return;
+    try {
+      const overlay = document.getElementById('scene-playback-overlay');
+      if (overlay && overlay.style) {
+        overlay.style.display = 'none';
+      }
+      const quickBtn = document.getElementById('nav-scenes-quick-btn');
+      if (quickBtn) {
+        quickBtn.classList?.remove?.('scene-running-active');
+        quickBtn.title = 'Launch Cinematic Scenes & Video Feed (S)';
+        quickBtn.innerHTML = `
+          <span class="hud-nav-icon">🎬</span>
+          <span class="hud-nav-sub">SCENES</span>
+        `;
+      }
+    } catch {}
   }
 
   /**
