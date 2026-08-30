@@ -6783,21 +6783,69 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
   }
 
   #title-bar {
-    top: 20px;
-    left: 20px;
+    top: max(8px, env(safe-area-inset-top, 8px));
+    left: 10px;
+    z-index: 120;
+    pointer-events: auto;
   }
 
   #title-bar h1 {
-    font-size: 16px;
-    letter-spacing: 4px;
-  }
-
-  #title-bar h1 {
-    gap: 8px;
+    font-size: 13px;
+    letter-spacing: 2px;
+    gap: 6px;
   }
 
   #title-bar .title-logo {
-    width: 36px;
+    width: 28px;
+    height: 28px;
+  }
+
+  #title-bar .subtitle {
+    display: none !important;
+  }
+
+  #title-bar .title-glow {
+    display: none;
+  }
+
+  #top-center-actions {
+    top: max(8px, env(safe-area-inset-top, 8px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 120;
+  }
+
+  #top-center-actions button {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  #top-center-actions button .material-symbols-outlined,
+  #top-center-actions button .share-icon {
+    font-size: 16px;
+  }
+
+  #style-indicator {
+    top: max(8px, env(safe-area-inset-top, 8px));
+    right: 10px;
+    z-index: 120;
+    text-align: right;
+  }
+
+  #style-indicator .indicator-label {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+
+  #style-indicator .indicator-value {
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-top: 1px;
   }
 
   #location-bar {
@@ -6820,12 +6868,12 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
 
   .hud-top-left,
   .hud-bottom-left {
-    left: 16px;
+    left: 10px;
   }
 
   .hud-top-right,
   .hud-bottom-right {
-    right: 16px;
+    right: 10px;
   }
 
   .hud-left-edge,
@@ -6835,9 +6883,7 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
 
   .hud-top-bar,
   .hud-bottom-bar {
-    width: calc(100vw - 24px);
-    left: 12px;
-    transform: none;
+    display: none !important;
   }
 
   .hud-top-bar {
@@ -6906,13 +6952,15 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
   }
 
   #left-panel-stack {
-    top: 70px;
-    right: 16px;
+    top: 48px;
+    left: 10px;
+    right: auto;
     bottom: calc(50vh + 8px);
-    left: 16px;
     width: auto;
+    max-width: calc(50vw - 16px);
     max-height: none;
-    overflow-y: auto;
+    overflow-y: visible;
+    pointer-events: none;
   }
 
   #right-context-rail {
@@ -6964,6 +7012,33 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
     bottom: auto;
     left: auto;
     width: 100%;
+    pointer-events: auto;
+  }
+
+  #left-panel-stack > [data-panel-id].collapsed {
+    width: fit-content !important;
+    min-width: 110px !important;
+    max-width: 145px !important;
+  }
+
+  #left-panel-stack > [data-panel-id]:not(.collapsed),
+  #right-context-rail > [data-panel-id]:not(.collapsed),
+  #right-context-rail > #global-context-panel:not(.collapsed) {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: max(68px, calc(env(safe-area-inset-bottom, 8px) + 68px)) !important;
+    top: auto !important;
+    width: auto !important;
+    max-width: none !important;
+    max-height: min(65vh, 520px) !important;
+    overflow-y: auto !important;
+    z-index: 170 !important;
+    pointer-events: auto !important;
+    border-radius: 14px !important;
+    background: rgba(9, 18, 27, 0.96) !important;
+    border: 1px solid rgba(0, 212, 255, 0.35) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 212, 255, 0.12) !important;
   }
 
   #scene-runtime {
@@ -8125,19 +8200,17 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 
 @media (max-width: 620px) {
   #command-dock {
-    --dock-side-compact: 3.25rem;
-    --dock-voice-width: 8.75rem;
+    --dock-side-compact: clamp(5.4rem, 26vw, 6.8rem);
+    --dock-voice-width: clamp(3.2rem, 14vw, 4.2rem);
   }
 
   #command-dock .panel-title,
   #command-dock .location-toolbar-label {
-    max-width: 2.3rem;
+    max-width: none;
+    font-size: 0.52rem;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  #left-panel-stack {
-    bottom: calc(50vh + 8px);
   }
 }
 
