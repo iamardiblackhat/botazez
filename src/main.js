@@ -140,7 +140,9 @@ async function init() {
     controller.enableTranslate = true;
     controller.enableTilt = true;
     controller.enableLook = true;
-    controller.minimumZoomDistance = 10.0;
+    controller.enableCollisionDetection = false;
+    controller.inertiaZoom = 0.8;
+    controller.minimumZoomDistance = 5.0;
     controller.maximumZoomDistance = Infinity;
 
     // Register per-layer data attribution into the "Data attribution" popover.
@@ -150,10 +152,12 @@ async function init() {
     // clutter the on-globe attribution line.
     registerDataCredits(viewer);
 
-    // Hide Cesium's default globe — Google Photorealistic 3D Tiles provide their own
-    // globe at all LODs (street level → orbital). The default globe's 2D imagery
-    // clips through 3D tile buildings at close range.
-    viewer.scene.globe.show = false;
+    // Keep globe enabled with dark baseColor so camera raycasts and mouse wheel zoom work at any angle & altitude
+    viewer.scene.globe.show = true;
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#020509');
+    viewer.scene.globe.enableLighting = false;
+    viewer.scene.globe.showGroundAtmosphere = false;
+    viewer.scene.globe.depthTestAgainstTerrain = false;
 
     // Keep a sky behind Google 3D Tiles, but soften Cesium's high-intensity
     // default atmosphere. With the globe hidden its bright limb otherwise
@@ -171,9 +175,8 @@ async function init() {
         onlyUsingWithGoogleGeocoder: true,
       });
       viewer.scene.primitives.add(tileset);
-      // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
-      // Google Photorealistic 3D Tiles provide their own terrain/elevation.
-      viewer.scene.globe.show = false;
+      // Keep base globe active for picking
+      viewer.scene.globe.show = true;
     } catch (tileError) {
       console.warn('[Init] Google 3D Tiles unavailable, falling back to Cesium globe:', tileError);
       const tileErrorDetail = describeError(tileError);
@@ -336,11 +339,107 @@ async function init() {
     };
     window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
 
+    initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager });
+
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);
     loaderStatus.textContent = `Error: ${describeError(error)}`;
     loaderStatus.style.color = '#ff4444';
   }
+}
+
+function initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager }) {
+  const camera = viewer.camera;
+
+  const doZoom = (factor) => {
+    const pos = camera.positionCartographic;
+    const height = pos ? pos.height : 5000;
+    const delta = Math.max(25, height * 0.25);
+    if (factor > 0) {
+      camera.zoomIn(delta);
+    } else {
+      camera.zoomOut(delta);
+    }
+    viewer.scene.requestRender();
+  };
+
+  const doResetNorth = () => {
+    const pitch = camera.pitch;
+    camera.flyTo({
+      destination: camera.position,
+      orientation: {
+        heading: 0,
+        pitch: pitch,
+        roll: 0,
+      },
+      duration: 1.0,
+      easingFunction: Cesium.EasingFunction.CUBIC_OUT,
+    });
+  };
+
+  const doToggleTilt = () => {
+    const currentPitch = Cesium.Math.toDegrees(camera.pitch);
+    const targetPitch = currentPitch < -60 ? -35 : -90;
+    camera.flyTo({
+      destination: camera.position,
+      orientation: {
+        heading: camera.heading,
+        pitch: Cesium.Math.toRadians(targetPitch),
+        roll: 0,
+      },
+      duration: 1.0,
+      easingFunction: Cesium.EasingFunction.CUBIC_OUT,
+    });
+  };
+
+  const doQuickScene = () => {
+    const scenePanel = document.getElementById('scene-panel');
+    if (scenePanel) {
+      scenePanel.classList.remove('collapsed');
+      scenePanel.scrollIntoView({ behavior: 'smooth' });
+    }
+    if (sceneDirector) {
+      sceneDirector.runNextScene();
+    }
+  };
+
+  const doQuickCctv = () => {
+    const cctvPanel = document.getElementById('cctv-panel');
+    if (cctvPanel) {
+      cctvPanel.classList.remove('collapsed');
+      cctvPanel.scrollIntoView({ behavior: 'smooth' });
+    }
+    if (dataManager) {
+      dataManager.enableLayer('cctv');
+    }
+    const cctvNearestBtn = document.getElementById('cctv-nearest-btn');
+    cctvNearestBtn?.click();
+  };
+
+  // Wire buttons
+  document.getElementById('nav-zoom-in-btn')?.addEventListener('click', () => doZoom(1));
+  document.getElementById('nav-zoom-out-btn')?.addEventListener('click', () => doZoom(-1));
+  document.getElementById('nav-reset-north-btn')?.addEventListener('click', doResetNorth);
+  document.getElementById('nav-tilt-btn')?.addEventListener('click', doToggleTilt);
+  document.getElementById('nav-scenes-quick-btn')?.addEventListener('click', doQuickScene);
+  document.getElementById('nav-cctv-quick-btn')?.addEventListener('click', doQuickCctv);
+
+  // Global Keyboard Navigation Shortcuts
+  window.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+
+    if (e.key === '+' || e.key === '=' || e.key === 'PageUp' || e.key === 'z' || e.key === 'Z') {
+      e.preventDefault();
+      doZoom(1);
+    } else if (e.key === '-' || e.key === '_' || e.key === 'PageDown' || e.key === 'x' || e.key === 'X') {
+      e.preventDefault();
+      doZoom(-1);
+    } else if (e.key === 'n' || e.key === 'N') {
+      doResetNorth();
+    } else if (e.key === 't' || e.key === 'T') {
+      doToggleTilt();
+    }
+  });
 }
 
 init();

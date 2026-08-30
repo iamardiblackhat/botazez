@@ -346,6 +346,31 @@
     <div class="cockpit-help">ESC EXIT <span>·</span> C TOGGLE</div>
   </section>
 
+  <!-- HUD Navigation & Camera Controls -->
+  <nav id="hud-nav-controls" class="hud-nav-controls" aria-label="Camera zoom and orientation">
+    <button id="nav-zoom-in-btn" class="hud-nav-btn" type="button" title="Zoom In (+)" aria-label="Zoom In">
+      <span class="hud-nav-icon">+</span>
+    </button>
+    <button id="nav-zoom-out-btn" class="hud-nav-btn" type="button" title="Zoom Out (−)" aria-label="Zoom Out">
+      <span class="hud-nav-icon">−</span>
+    </button>
+    <button id="nav-reset-north-btn" class="hud-nav-btn" type="button" title="Reset North (N)" aria-label="Reset North">
+      <span class="hud-nav-icon">▲</span>
+      <span class="hud-nav-sub">N</span>
+    </button>
+    <button id="nav-tilt-btn" class="hud-nav-btn" type="button" title="Toggle 2D/3D View (T)" aria-label="Toggle 2D/3D View">
+      <span class="hud-nav-icon">3D</span>
+    </button>
+    <button id="nav-scenes-quick-btn" class="hud-nav-btn hud-nav-action-btn" type="button" title="Launch Cinematic Scenes & Video Feed (S)" aria-label="Cinematic Scenes">
+      <span class="hud-nav-icon">🎬</span>
+      <span class="hud-nav-sub">SCENES</span>
+    </button>
+    <button id="nav-cctv-quick-btn" class="hud-nav-btn hud-nav-action-btn" type="button" title="Live Video & Traffic Cameras (C)" aria-label="Live Video Cameras">
+      <span class="hud-nav-icon">📹</span>
+      <span class="hud-nav-sub">CCTV</span>
+    </button>
+  </nav>
+
   <nav id="view-switcher" aria-label="View switcher">
     <button id="cockpit-reset-globe" type="button" aria-label="Reset cockpit to full globe view" title="Exit cockpit and return to full globe view" hidden>
       <span class="material-symbols-outlined" aria-hidden="true">public</span>

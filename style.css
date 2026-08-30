@@ -9161,3 +9161,92 @@ body.scene-playback-mode #first-run-launcher {
   /* Scrolling a tile into view must not animate either. */
   .first-run-choices { scroll-behavior: auto; }
 }
+
+/* ── HUD Navigation & Camera Zoom Controls ── */
+.hud-nav-controls {
+  position: absolute;
+  top: 72px;
+  right: 18px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(2, 15, 23, 0.78);
+  border: 1px solid rgba(0, 212, 255, 0.28);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.hud-nav-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(6, 32, 45, 0.65);
+  color: #79d7df;
+  font-family: var(--font-mono, monospace);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.hud-nav-btn:hover {
+  background: rgba(0, 212, 255, 0.22);
+  border-color: rgba(0, 212, 255, 0.85);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+
+.hud-nav-btn:active {
+  transform: scale(0.94);
+}
+
+.hud-nav-icon {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hud-nav-sub {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+.hud-nav-action-btn {
+  height: 44px;
+  background: rgba(0, 70, 90, 0.55);
+}
+
+.hud-nav-action-btn:hover {
+  background: rgba(0, 160, 200, 0.4);
+}
+
+@media (max-width: 768px) {
+  .hud-nav-controls {
+    top: 60px;
+    right: 10px;
+    padding: 4px;
+    gap: 4px;
+  }
+  .hud-nav-btn {
+    width: 34px;
+    height: 34px;
+  }
+  .hud-nav-action-btn {
+    height: 38px;
+  }
+}
+
