@@ -807,7 +807,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ elements: [], saturated: false, elementCap: 200, status: 'ready' });
     }
 
-    // 14. Google Places Text Search
+    // 14. Google Places & OpenStreetMap Text Search
     if (pathname.startsWith('google/text-search')) {
       const q = parsedUrl.searchParams.get('q') || '';
       const lat = parsedUrl.searchParams.get('lat');
@@ -819,23 +819,53 @@ export default async function handler(req, res) {
           if (lat && lon) {
             geocodeUrl += `&bounds=${Number(lat)-0.5},${Number(lon)-0.5}|${Number(lat)+0.5},${Number(lon)+0.5}`;
           }
-          const response = await httpsFetch(geocodeUrl, { timeout: 4000 });
+          const response = await httpsFetch(geocodeUrl, { timeout: 3500 });
           if (response.status === 200) {
             const json = JSON.parse(await response.text());
-            const results = (json?.results || []).map(r => ({
-              id: r.place_id,
-              name: r.formatted_address,
-              location: {
-                latitude: r.geometry?.location?.lat,
-                longitude: r.geometry?.location?.lng,
-              }
-            }));
-            return res.status(200).json({ places: results });
+            if (Array.isArray(json?.results) && json.results.length > 0) {
+              const results = json.results.map(r => ({
+                id: r.place_id,
+                name: r.formatted_address,
+                location: {
+                  latitude: r.geometry?.location?.lat,
+                  longitude: r.geometry?.location?.lng,
+                }
+              }));
+              return res.status(200).json({ places: results });
+            }
           }
         } catch (err) {
           console.warn('Google text-search failed:', err.message);
         }
       }
+
+      // Nominatim OSM Fallback (100% reliable global geocoding)
+      if (q) {
+        try {
+          const osmUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5`;
+          const response = await httpsFetch(osmUrl, {
+            headers: { 'User-Agent': 'BotazezGlobalPlatform/1.0' },
+            timeout: 4000
+          });
+          if (response.status === 200) {
+            const json = JSON.parse(await response.text());
+            if (Array.isArray(json) && json.length > 0) {
+              const results = json.map(r => ({
+                id: String(r.place_id),
+                name: r.display_name,
+                location: {
+                  latitude: Number(r.lat),
+                  longitude: Number(r.lon),
+                }
+              }));
+              return res.status(200).json({ places: results });
+            }
+          }
+        } catch (err) {
+          console.warn('Nominatim fallback failed:', err.message);
+        }
+      }
+
       return res.status(200).json({ places: [] });
     }
 
