@@ -277,16 +277,38 @@ export default async function handler(req, res) {
     if (pathname.startsWith('adsblol')) {
       if (pathname.includes('trace')) {
         const hex = parsedUrl.searchParams.get('hex') || '';
-        const response = await httpsFetch(`https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`);
-        const data = await response.text();
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(response.status).send(data);
+        try {
+          const response = await httpsFetch(`https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`, { timeout: 3000 });
+          const data = await response.text();
+          res.setHeader('Content-Type', 'application/json');
+          return res.status(response.status).send(data);
+        } catch {
+          return res.status(200).json({ trace: [] });
+        }
       } else {
-        const response = await httpsFetch('https://api.adsb.lol/v2/mil');
-        const data = await response.text();
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'public, max-age=5');
-        return res.status(response.status).send(data);
+        const now = Date.now();
+        if (_adsbLolCache && now - _adsbLolCacheTime < 10000) {
+          res.setHeader('Content-Type', 'application/json');
+          return res.status(200).send(_adsbLolCache);
+        }
+        try {
+          const response = await httpsFetch('https://api.adsb.lol/v2/mil', { timeout: 3500 });
+          if (response.status === 200) {
+            const data = await response.text();
+            _adsbLolCache = data;
+            _adsbLolCacheTime = now;
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'public, max-age=5');
+            return res.status(200).send(data);
+          }
+        } catch (err) {
+          console.warn('adsb.lol fetch failed, checking cache:', err);
+        }
+        if (_adsbLolCache) {
+          res.setHeader('Content-Type', 'application/json');
+          return res.status(200).send(_adsbLolCache);
+        }
+        return res.status(200).json({ ac: [] });
       }
     }
 
