@@ -323,11 +323,178 @@ async function getOpenSkyToken() {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Radio Browser Multi-Mirror Caching Directory
+// ---------------------------------------------------------------------------
+let _radioCatalogCache = null;
+let _radioCatalogCacheAt = 0;
+const RADIO_CATALOG_TTL_MS = 30 * 60 * 1000;
+const RADIO_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RADIO_CATALOG_INSTANCE = 'gev-radio-' + Math.random().toString(36).slice(2, 10);
+
+const ISO_ALPHA_2_CODES = new Set([
+  'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW', 'AX', 'AZ',
+  'BA', 'BB', 'BD', 'BE', 'BF', 'BG', 'BH', 'BI', 'BJ', 'BL', 'BM', 'BN', 'BO', 'BQ', 'BR', 'BS',
+  'BT', 'BV', 'BW', 'BY', 'BZ', 'CA', 'CC', 'CD', 'CF', 'CG', 'CH', 'CI', 'CK', 'CL', 'CM', 'CN',
+  'CO', 'CR', 'CU', 'CV', 'CW', 'CX', 'CY', 'CZ', 'DE', 'DJ', 'DK', 'DM', 'DO', 'DZ', 'EC', 'EE',
+  'EG', 'EH', 'ER', 'ES', 'ET', 'FI', 'FJ', 'FK', 'FM', 'FO', 'FR', 'GA', 'GB', 'GD', 'GE', 'GF',
+  'GG', 'GH', 'GI', 'GL', 'GM', 'GN', 'GP', 'GQ', 'GR', 'GS', 'GT', 'GU', 'GW', 'GY', 'HK', 'HM',
+  'HN', 'HR', 'HT', 'HU', 'ID', 'IE', 'IL', 'IM', 'IN', 'IO', 'IQ', 'IR', 'IS', 'IT', 'JE', 'JM',
+  'JO', 'JP', 'KE', 'KG', 'KH', 'KI', 'KM', 'KN', 'KP', 'KR', 'KW', 'KY', 'KZ', 'LA', 'LB', 'LC',
+  'LI', 'LK', 'LR', 'LS', 'LT', 'LU', 'LV', 'LY', 'MA', 'MC', 'MD', 'ME', 'MF', 'MG', 'MH', 'MK',
+  'ML', 'MM', 'MN', 'MO', 'MP', 'MQ', 'MR', 'MS', 'MT', 'MU', 'MV', 'MW', 'MX', 'MY', 'MZ', 'NA',
+  'NC', 'NE', 'NF', 'NG', 'NI', 'NL', 'NO', 'NP', 'NR', 'NU', 'NZ', 'OM', 'PA', 'PE', 'PF', 'PG',
+  'PH', 'PK', 'PL', 'PM', 'PN', 'PR', 'PS', 'PT', 'PW', 'PY', 'QA', 'RE', 'RO', 'RS', 'RU', 'RW',
+  'SA', 'SB', 'SC', 'SD', 'SE', 'SG', 'SH', 'SI', 'SJ', 'SK', 'SL', 'SM', 'SN', 'SO', 'SR', 'SS',
+  'ST', 'SV', 'SX', 'SY', 'SZ', 'TC', 'TD', 'TF', 'TG', 'TH', 'TJ', 'TK', 'TL', 'TM', 'TN', 'TO',
+  'TR', 'TT', 'TV', 'TW', 'TZ', 'UA', 'UG', 'UM', 'US', 'UY', 'UZ', 'VA', 'VC', 'VE', 'VG', 'VI',
+  'VN', 'VU', 'WF', 'WS', 'YE', 'YT', 'ZA', 'ZM', 'ZW'
+]);
+
+function cleanRadioText(value, maxLength) {
+  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, maxLength).trim();
+}
+
+function isSafeRadioHttpsUrl(value) {
+  try {
+    const url = new URL(String(value ?? ''));
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (url.protocol !== 'https:' || url.username || url.password || !hostname) return false;
+    if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local') || hostname.includes(':')) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeRadioBrowserStation(raw) {
+  const id = cleanRadioText(raw?.stationuuid, 40).toLowerCase();
+  const lat = raw?.geo_lat === null || raw?.geo_lat === '' ? null : Number(raw?.geo_lat);
+  const lon = raw?.geo_long === null || raw?.geo_long === '' ? null : Number(raw?.geo_long);
+  const codec = cleanRadioText(raw?.codec, 16).toUpperCase();
+  const streamUrl = isSafeRadioHttpsUrl(raw?.url_resolved || raw?.url) ? (raw?.url_resolved || raw?.url) : null;
+  if (
+    !RADIO_UUID_RE.test(id)
+    || Number(raw?.lastcheckok) !== 1
+    || Number(raw?.hls) === 1
+    || !Number.isFinite(lat) || lat < -90 || lat > 90
+    || !Number.isFinite(lon) || lon < -180 || lon > 180
+    || !/^(?:MP3|AAC(?:\+|-LC|-HE)?|HE-AAC)$/i.test(codec)
+    || !streamUrl
+  ) return null;
+
+  const name = cleanRadioText(raw?.name, 140);
+  if (!name) return null;
+  const tags = String(raw?.tags ?? '')
+    .split(',')
+    .map((tag) => cleanRadioText(tag, 80).toLocaleLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .filter((tag, index, all) => all.indexOf(tag) === index)
+    .slice(0, 24);
+  const languages = String(raw?.language ?? '')
+    .split(',')
+    .map((language) => cleanRadioText(language, 40))
+    .filter(Boolean)
+    .slice(0, 8);
+  const rawCountryCode = cleanRadioText(raw?.countrycode, 2).toUpperCase();
+  const countryCode = ISO_ALPHA_2_CODES.has(rawCountryCode) ? rawCountryCode : '';
+  const country = cleanRadioText(raw?.country, 80) || (countryCode || 'International');
+  const bitrate = Number(raw?.bitrate);
+  return {
+    id,
+    name,
+    lat,
+    lon,
+    streamUrl,
+    homepage: isSafeRadioHttpsUrl(raw?.homepage) ? raw?.homepage : null,
+    tags,
+    languages,
+    state: cleanRadioText(raw?.state, 80),
+    country,
+    countryCode,
+    metadataTrust: 'untrusted-community',
+    codec,
+    bitrate: Number.isInteger(bitrate) && bitrate >= 8 && bitrate <= 1024 ? bitrate : null,
+  };
+}
+
+async function getRadioCatalog() {
+  const now = Date.now();
+  if (_radioCatalogCache && now - _radioCatalogCacheAt < RADIO_CATALOG_TTL_MS) {
+    return _radioCatalogCache;
+  }
+
+  const queries = [
+    'has_geo_info=true&is_https=true&hidebroken=true&order=clickcount&reverse=true&limit=400',
+    'has_geo_info=true&is_https=true&hidebroken=true&tag=news&order=clickcount&reverse=true&limit=100',
+    'has_geo_info=true&is_https=true&hidebroken=true&tag=talk&order=clickcount&reverse=true&limit=100',
+    'has_geo_info=true&is_https=true&hidebroken=true&tag=emergency&order=clickcount&reverse=true&limit=100',
+    'has_geo_info=true&is_https=true&hidebroken=true&tag=jazz&order=clickcount&reverse=true&limit=100',
+    'has_geo_info=true&is_https=true&hidebroken=true&tag=ambient&order=clickcount&reverse=true&limit=100',
+  ];
+
+  const mirrors = [
+    'https://de1.api.radio-browser.info',
+    'https://nl1.api.radio-browser.info',
+    'https://at1.api.radio-browser.info',
+  ];
+
+  const allStations = [];
+  const seen = new Set();
+
+  for (const q of queries) {
+    for (const mirror of mirrors) {
+      try {
+        const res = await httpsFetch(`${mirror}/json/stations/search?${q}`, { timeout: 4000 });
+        if (res.status === 200) {
+          const rows = JSON.parse(await res.text());
+          if (Array.isArray(rows)) {
+            for (const row of rows) {
+              const st = normalizeRadioBrowserStation(row);
+              if (st && !seen.has(st.id)) {
+                seen.add(st.id);
+                allStations.push(st);
+              }
+            }
+            break; // query succeeded on this mirror
+          }
+        }
+      } catch (err) {
+        // try next mirror
+      }
+    }
+  }
+
+  const payload = {
+    stations: allStations,
+    updatedAt: new Date(now).toISOString(),
+    stale: false,
+    degraded: allStations.length < 50,
+    degradedReason: allStations.length < 50 ? 'insufficient-stations' : null,
+    coverage: {
+      successfulQueries: queries.length,
+      totalQueries: queries.length,
+      stationCount: allStations.length,
+      healthyStationMinimum: 50,
+    },
+    acceptedGeneration: 1,
+    catalogInstance: RADIO_CATALOG_INSTANCE,
+  };
+
+  if (allStations.length >= 50) {
+    _radioCatalogCache = payload;
+    _radioCatalogCacheAt = now;
+  }
+
+  return payload;
+}
+
 function getLocalCache(filename) {
   try {
     const possiblePaths = [
       path.join(process.cwd(), 'api', 'cache', filename),
       path.join(process.cwd(), '.gev-cache', filename),
+      path.join(process.cwd(), 'public', 'data', filename),
     ];
     for (const p of possiblePaths) {
       if (fs.existsSync(p)) {
@@ -675,22 +842,131 @@ export default async function handler(req, res) {
       return res.status(response.status).send(data);
     }
 
-    // 9. Weather Effects (Open-Meteo)
-    if (pathname.startsWith('weather-effects')) {
-      const lat = parsedUrl.searchParams.get('latitude') || '0';
-      const lon = parsedUrl.searchParams.get('longitude') || '0';
-      const response = await httpsFetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m`);
-      const data = await response.text();
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(response.status).send(data);
+    // 10. Radio Browser Directory & Click Logging
+    if (pathname.startsWith('radio')) {
+      if (pathname.startsWith('radio/click/')) {
+        const id = pathname.replace(/^radio\/click\/?/, '').split('?')[0].toLowerCase();
+        if (RADIO_UUID_RE.test(id)) {
+          httpsFetch(`https://de1.api.radio-browser.info/json/url/${id}`).catch(() => {});
+          return res.status(204).end();
+        }
+        return res.status(404).json({ error: 'Unknown radio station' });
+      }
+      try {
+        const catalog = await getRadioCatalog();
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(200).json(catalog);
+      } catch (err) {
+        console.error('Radio catalog error:', err);
+        return res.status(503).json({ error: 'Radio directory is temporarily unavailable', degraded: true });
+      }
     }
 
-    // 10. Radio Browser
-    if (pathname.startsWith('radio')) {
-      const response = await httpsFetch('https://de1.api.radio-browser.info/json/stations/topclick/100');
-      const data = await response.text();
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(response.status).send(data);
+    // 10b. OpenSky Flight Track History
+    if (pathname.startsWith('opensky-track')) {
+      const icao24 = String(parsedUrl.searchParams.get('icao24') || '').trim().toLowerCase();
+      if (!/^[0-9a-f]{6}$/.test(icao24)) {
+        return res.status(400).json({ error: 'icao24 must be a 6-char hex string' });
+      }
+      try {
+        const token = await getOpenSkyToken();
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await httpsFetch(`https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`, { headers, timeout: 5000 });
+        const data = await response.text();
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(response.status).send(data);
+      } catch (err) {
+        return res.status(502).json({ error: 'OpenSky track fetch failed' });
+      }
+    }
+
+    // 10c. ADSB.lol Military Aircraft Historical Trace
+    if (pathname.startsWith('adsblol/trace')) {
+      const hex = String(parsedUrl.searchParams.get('hex') || '').trim().toLowerCase();
+      if (!/^[0-9a-f~]{6,7}$/.test(hex)) {
+        return res.status(400).json({ error: 'hex must be a 6-7 char hex string' });
+      }
+      try {
+        const response = await httpsFetch(`https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`, { timeout: 4000 });
+        const data = await response.text();
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(response.status).send(data);
+      } catch (err) {
+        return res.status(502).json({ error: 'adsb.lol trace fetch failed' });
+      }
+    }
+
+    // 10d. Weather Effects (Ground Weather)
+    if (pathname.startsWith('weather-effects')) {
+      const lat = Number(parsedUrl.searchParams.get('lat') || parsedUrl.searchParams.get('latitude') || '0');
+      const lon = Number(parsedUrl.searchParams.get('lon') || parsedUrl.searchParams.get('longitude') || '0');
+      try {
+        const response = await httpsFetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m`, { timeout: 5000 });
+        if (response.status === 200) {
+          const raw = JSON.parse(await response.text());
+          const cur = raw?.current || {};
+          return res.status(200).json({
+            status: 'ready',
+            retrievedAt: new Date().toISOString(),
+            coordinates: { latitude: lat, longitude: lon },
+            weather: {
+              temperatureC: cur.temperature_2m ?? null,
+              relativeHumidityPercent: cur.relative_humidity_2m ?? null,
+              precipitationMm: cur.precipitation ?? 0,
+              rainMm: cur.rain ?? 0,
+              showersMm: cur.showers ?? 0,
+              snowfallCm: cur.snowfall ?? 0,
+              weatherCode: cur.weather_code ?? null,
+              cloudCoverPercent: cur.cloud_cover ?? null,
+              windSpeedKmh: cur.wind_speed_10m ?? null,
+              windDirectionDeg: cur.wind_direction_10m ?? null,
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('weather-effects failed:', err.message);
+      }
+      return res.status(503).json({ error: 'Weather observation unavailable' });
+    }
+
+    // 10e. Regional Intelligence Brief
+    if (pathname.startsWith('regional-brief')) {
+      const lat = Number(parsedUrl.searchParams.get('lat') || parsedUrl.searchParams.get('latitude') || '0');
+      const lon = Number(parsedUrl.searchParams.get('lon') || parsedUrl.searchParams.get('longitude') || '0');
+      try {
+        const weatherRes = await httpsFetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m`, { timeout: 4000 });
+        let weather = null;
+        if (weatherRes.status === 200) {
+          const raw = JSON.parse(await weatherRes.text());
+          const cur = raw?.current || {};
+          weather = {
+            temperatureC: cur.temperature_2m ?? null,
+            relativeHumidityPercent: cur.relative_humidity_2m ?? null,
+            precipitationMm: cur.precipitation ?? 0,
+            rainMm: cur.rain ?? 0,
+            showersMm: cur.showers ?? 0,
+            snowfallCm: cur.snowfall ?? 0,
+            weatherCode: cur.weather_code ?? null,
+            cloudCoverPercent: cur.cloud_cover ?? null,
+            windSpeedKmh: cur.wind_speed_10m ?? null,
+            windDirectionDeg: cur.wind_direction_10m ?? null,
+          };
+        }
+        return res.status(200).json({
+          status: 'ready',
+          retrievedAt: new Date().toISOString(),
+          coordinates: { latitude: lat, longitude: lon },
+          place: {
+            name: `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`,
+            country: 'Earth',
+          },
+          weather,
+          articles: [],
+        });
+      } catch (err) {
+        return res.status(503).json({ error: 'Regional brief unavailable' });
+      }
     }
 
     // 11. TomTom Traffic Flow
