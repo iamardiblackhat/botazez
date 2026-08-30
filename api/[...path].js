@@ -13,6 +13,8 @@ let _openskyToken = null;
 let _openskyTokenExpiry = 0;
 let _openskyCacheBody = null;
 let _openskyCacheTime = 0;
+let _adsbLolCache = null;
+let _adsbLolCacheTime = 0;
 
 function httpsFetch(urlStr, options = {}) {
   return new Promise((resolve, reject) => {
