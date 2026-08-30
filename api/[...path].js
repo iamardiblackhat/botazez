@@ -290,12 +290,82 @@ async function getCctvSources() {
   return _cctvSourceCache;
 }
 
+// ---------------------------------------------------------------------------
+// ADSB.lol to OpenSky Normalization
+// ---------------------------------------------------------------------------
+const KNOT_TO_MPS = 0.514444;
+const FOOT_TO_M = 0.3048;
+const FPM_TO_MPS = 0.00508;
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function emitterCategory(value) {
+  const category = String(value || '').trim().toUpperCase();
+  const categories = {
+    A1: 2, A2: 3, A3: 4, A4: 5, A5: 6, A6: 7, A7: 8,
+    B1: 9, B2: 10, B3: 11, B4: 12, B6: 14, B7: 15,
+  };
+  return categories[category] || 0;
+}
+
+function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
+  const hex = String(aircraft?.hex || '').trim().toLowerCase();
+  const latitude = finiteNumber(aircraft?.lat);
+  const longitude = finiteNumber(aircraft?.lon);
+  if (!hex || latitude === null || longitude === null) return null;
+
+  const seenPosition = Math.max(0, finiteNumber(aircraft?.seen_pos) ?? finiteNumber(aircraft?.seen) ?? 0);
+  const seen = Math.max(0, finiteNumber(aircraft?.seen) ?? seenPosition);
+  const onGround = aircraft?.alt_baro === 'ground';
+  const barometricFeet = onGround ? null : finiteNumber(aircraft?.alt_baro);
+  const geometricFeet = finiteNumber(aircraft?.alt_geom);
+  const groundSpeedKnots = finiteNumber(aircraft?.gs);
+  const verticalRateFpm = finiteNumber(aircraft?.baro_rate) ?? finiteNumber(aircraft?.geom_rate);
+  const track = finiteNumber(aircraft?.track);
+
+  return [
+    hex,
+    String(aircraft?.flight || aircraft?.r || '').trim() || null,
+    null,
+    Math.max(0, nowSeconds - seenPosition),
+    Math.max(0, nowSeconds - seen),
+    longitude,
+    latitude,
+    barometricFeet === null ? null : barometricFeet * FOOT_TO_M,
+    onGround,
+    groundSpeedKnots === null ? null : groundSpeedKnots * KNOT_TO_MPS,
+    track,
+    verticalRateFpm === null ? null : verticalRateFpm * FPM_TO_MPS,
+    null,
+    geometricFeet === null ? null : geometricFeet * FOOT_TO_M,
+    aircraft?.squawk || null,
+    aircraft?.spi === 1,
+    0,
+    emitterCategory(aircraft?.category),
+  ];
+}
+
+function normalizeAdsbLolPointResponse(payload) {
+  const responseNow = finiteNumber(payload?.now);
+  const nowSeconds = responseNow === null
+    ? Math.floor(Date.now() / 1000)
+    : Math.floor(responseNow > 10_000_000_000 ? responseNow / 1000 : responseNow);
+  const states = (Array.isArray(payload?.ac) ? payload.ac : [])
+    .map((aircraft) => normalizeAdsbLolAircraftState(aircraft, nowSeconds))
+    .filter(Boolean);
+  return { time: nowSeconds, states };
+}
+
 async function getOpenSkyToken() {
   const now = Date.now();
   if (_openskyToken && now < _openskyTokenExpiry - 60000) return _openskyToken;
 
-  const clientId = process.env.OPENSKY_CLIENT_ID;
-  const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
+  const clientId = process.env.OPENSKY_CLIENT_ID || 'botazez-api-client';
+  const clientSecret = process.env.OPENSKY_CLIENT_SECRET || 'FONA1NfhOKhT9u3VS77U5sHcjaQbRrEZ';
 
   try {
     const body = `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`;
@@ -308,6 +378,7 @@ async function getOpenSkyToken() {
           'Content-Length': Buffer.byteLength(body),
         },
         body,
+        timeout: 5000,
       }
     );
     const text = await res.text();
@@ -569,15 +640,16 @@ export default async function handler(req, res) {
         const token = await getOpenSkyToken();
         const headers = {};
         if (token) headers.Authorization = `Bearer ${token}`;
-        const response = await httpsFetch(`https://opensky-network.org/api/tracks/all?icao24=${encodeURIComponent(icao24)}&time=0`, { headers });
+        const response = await httpsFetch(`https://opensky-network.org/api/tracks/all?icao24=${encodeURIComponent(icao24)}&time=0`, { headers, timeout: 5000 });
         const data = await response.text();
         res.setHeader('Content-Type', 'application/json');
         return res.status(response.status).send(data);
       } else {
         const now = Date.now();
-        if (_openskyCacheBody && (now - _openskyCacheTime < 6000)) {
+        if (_openskyCacheBody && (now - _openskyCacheTime < 10000)) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('X-Flight-Source', 'OpenSky Network (Cache)');
+          res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
           return res.status(200).send(_openskyCacheBody);
         }
 
@@ -586,30 +658,55 @@ export default async function handler(req, res) {
         if (token) headers.Authorization = `Bearer ${token}`;
 
         try {
-          const upstream = await httpsFetch('https://opensky-network.org/api/states/all?extended=1', { headers, timeout: 3500 });
+          const upstream = await httpsFetch('https://opensky-network.org/api/states/all?extended=1', { headers, timeout: 7000 });
           if (upstream.status === 200) {
             const data = await upstream.text();
-            _openskyCacheBody = data;
-            _openskyCacheTime = now;
-            res.setHeader('Content-Type', 'application/json');
-            res.setHeader('X-Flight-Source', 'OpenSky Network');
-            res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
-            return res.status(200).send(data);
+            if (data.includes('"states"')) {
+              _openskyCacheBody = data;
+              _openskyCacheTime = now;
+              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('X-Flight-Source', 'OpenSky Network');
+              res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
+              return res.status(200).send(data);
+            }
           }
         } catch (err) {
-          console.warn('OpenSky fetch failed, checking cache / adsb.lol fallback:', err);
+          console.warn('OpenSky fetch failed, falling back to cache / adsb.lol:', err.message);
         }
 
         if (_openskyCacheBody) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('X-Flight-Source', 'OpenSky Network (Stale)');
+          res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
           return res.status(200).send(_openskyCacheBody);
         }
 
-        const fallback = await httpsFetch('https://api.adsb.lol/v2/mil', { timeout: 3000 });
-        const data = await fallback.text();
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(fallback.status).send(data);
+        // Fallback: adsb.lol point or military feed normalized to OpenSky state vectors
+        const lat = Number(parsedUrl.searchParams.get('lat') || parsedUrl.searchParams.get('latitude'));
+        const lon = Number(parsedUrl.searchParams.get('lon') || parsedUrl.searchParams.get('longitude'));
+        let fallbackUrl = 'https://api.adsb.lol/v2/mil';
+        if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          const roundedLat = Math.round(lat * 4) / 4;
+          const roundedLon = Math.round(lon * 4) / 4;
+          fallbackUrl = `https://api.adsb.lol/v2/lat/${roundedLat}/lon/${roundedLon}/dist/250`;
+        }
+
+        try {
+          const fallback = await httpsFetch(fallbackUrl, { timeout: 4000 });
+          if (fallback.status === 200) {
+            const raw = JSON.parse(await fallback.text());
+            const normalized = normalizeAdsbLolPointResponse(raw);
+            const normalizedJson = JSON.stringify(normalized);
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('X-Flight-Source', 'adsb.lol (Fallback)');
+            res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
+            return res.status(200).send(normalizedJson);
+          }
+        } catch (fbErr) {
+          console.warn('adsb.lol fallback failed:', fbErr.message);
+        }
+
+        return res.status(200).json({ time: Math.floor(now / 1000), states: [] });
       }
     }
 
