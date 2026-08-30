@@ -205,15 +205,29 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. CelesTrak Satellite TLE Elements
+    // 3. CelesTrak Satellite TLE Elements (Instant high-speed delivery)
     if (pathname.startsWith('celestrak')) {
       const group = pathname.replace(/^celestrak\/?/, '').split('?')[0] || 'stations';
       res.setHeader('Content-Type', 'text/plain');
       res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
 
+      // 1. Instant local cache lookup (sub-millisecond)
+      const cached = getLocalCache(`celestrak-${group}.json`);
+      if (cached) {
+        return res.status(200).send(cached);
+      }
+
+      // 2. Fallback to active/stations cache
+      const activeCache = getLocalCache('celestrak-active.json') || getLocalCache('celestrak-stations.json');
+      if (activeCache) {
+        return res.status(200).send(activeCache);
+      }
+
+      // 3. Upstream fallback if no cache present
       try {
         const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(group)}&FORMAT=tle`;
         const upstream = await httpsFetch(url, {
+          timeout: 4000,
           headers: { 'User-Agent': 'gods-eye-view-celestrak-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)' }
         });
         if (upstream.status === 200) {
@@ -223,19 +237,7 @@ export default async function handler(req, res) {
           }
         }
       } catch (err) {
-        console.warn(`CelesTrak fetch failed for ${group}, using local cache:`, err);
-      }
-
-      // Serve local bundled TLE cache
-      const cached = getLocalCache(`celestrak-${group}.json`);
-      if (cached) {
-        return res.status(200).send(cached);
-      }
-
-      // If specific group cache not found, fallback to active or stations
-      const activeCache = getLocalCache('celestrak-active.json') || getLocalCache('celestrak-stations.json');
-      if (activeCache) {
-        return res.status(200).send(activeCache);
+        console.warn(`CelesTrak fetch failed for ${group}:`, err);
       }
 
       return res.status(502).send('Satellite feed temporarily unavailable');
