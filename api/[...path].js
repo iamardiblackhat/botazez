@@ -147,7 +147,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. Realtime Token / Voice Standby
+    // 3. Realtime Token & Debug Log
+    if (pathname.startsWith('realtime/debug-log')) {
+      return res.status(200).json({ ok: true });
+    }
     if (pathname.startsWith('realtime/token')) {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
