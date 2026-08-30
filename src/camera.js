@@ -29,6 +29,14 @@ export const CAMERA_PRESETS = {
       roll: 0.0,
     },
   },
+  london: {
+    destination: Cesium.Cartesian3.fromDegrees(-0.1246, 51.5007, 800),
+    orientation: {
+      heading: Cesium.Math.toRadians(15),
+      pitch: Cesium.Math.toRadians(-28),
+      roll: 0.0,
+    },
+  },
 };
 
 /**
@@ -44,6 +52,35 @@ export function flyToPreset(viewer, presetName, duration = 3.0) {
     duration,
     easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
   });
+}
+
+/**
+ * Set camera to London on load with a cinematic fly-in.
+ */
+export function flyToLondon(viewer) {
+  // Start from high altitude over London, then fly down
+  viewer.camera.setView({
+    destination: Cesium.Cartesian3.fromDegrees(-0.1246, 51.5007, 35000),
+    orientation: {
+      heading: Cesium.Math.toRadians(0),
+      pitch: Cesium.Math.toRadians(-90),
+      roll: 0.0,
+    },
+  });
+
+  // Cinematic fly-in after a brief pause
+  setTimeout(() => {
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(-0.1246, 51.5007, 600),
+      orientation: {
+        heading: Cesium.Math.toRadians(15),
+        pitch: Cesium.Math.toRadians(-28),
+        roll: 0.0,
+      },
+      duration: 4.0,
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+    });
+  }, 500);
 }
 
 /**
@@ -74,3 +111,4 @@ export function flyToAustin(viewer) {
     });
   }, 500);
 }
+
