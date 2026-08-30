@@ -3,6 +3,8 @@
  * Handles all live data proxying natively on Vercel.
  */
 
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 let _openskyToken = null;
 let _openskyTokenExpiry = 0;
 
@@ -19,7 +21,10 @@ async function getOpenSkyToken() {
       'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': USER_AGENT,
+        },
         body: `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`,
       }
     );
@@ -52,17 +57,21 @@ export default async function handler(req, res) {
   try {
     // 1. OpenSky Live Aircraft
     if (pathname.startsWith('opensky')) {
-      if (pathname === 'opensky-track') {
+      if (pathname.includes('track')) {
         const icao24 = parsedUrl.searchParams.get('icao24') || '';
         const token = await getOpenSkyToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const headers = { 'User-Agent': USER_AGENT };
+        if (token) headers.Authorization = `Bearer ${token}`;
         const response = await fetch(`https://opensky-network.org/api/tracks/all?icao24=${encodeURIComponent(icao24)}&time=0`, { headers });
         const data = await response.text();
         res.setHeader('Content-Type', 'application/json');
         return res.status(response.status).send(data);
       } else {
         const token = await getOpenSkyToken();
-        const headers = { Accept: 'application/json' };
+        const headers = {
+          Accept: 'application/json',
+          'User-Agent': USER_AGENT,
+        };
         if (token) headers.Authorization = `Bearer ${token}`;
         
         const upstream = await fetch('https://opensky-network.org/api/states/all?extended=1', { headers });
@@ -77,7 +86,7 @@ export default async function handler(req, res) {
     if (pathname.startsWith('realtime/token')) {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        return res.status(503).json({ error: 'OPENAI_API_KEY is not set on Vercel' });
+        return res.status(503).json({ error: 'OPENAI_API_KEY is not configured on Vercel' });
       }
       const model = process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime-2';
       const voice = process.env.OPENAI_REALTIME_VOICE || 'marin';
@@ -86,6 +95,7 @@ export default async function handler(req, res) {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          'User-Agent': USER_AGENT,
         },
         body: JSON.stringify({
           model,
@@ -102,14 +112,16 @@ export default async function handler(req, res) {
     if (pathname.startsWith('openai/hud-summary')) {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
-        return res.status(503).json({ error: 'OPENAI_API_KEY is not set on Vercel' });
+        return res.status(503).json({ error: 'OPENAI_API_KEY is not configured on Vercel' });
       }
       return res.status(200).json({ summary: 'Voice & Intelligence Engine active.' });
     }
 
     // 4. Celestrak Satellites
     if (pathname.startsWith('celestrak')) {
-      const upstream = await fetch(`https://celestrak.org/NORAD/elements/gp.php${search}`);
+      const upstream = await fetch(`https://celestrak.org/NORAD/elements/gp.php${search}`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
       const data = await upstream.text();
       res.setHeader('Content-Type', 'text/plain');
       res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
@@ -121,7 +133,10 @@ export default async function handler(req, res) {
       const body = req.body || '';
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': USER_AGENT,
+        },
         body: typeof body === 'string' ? body : new URLSearchParams(body).toString(),
       });
       const data = await response.text();
@@ -133,12 +148,16 @@ export default async function handler(req, res) {
     if (pathname.startsWith('adsblol')) {
       if (pathname.includes('trace')) {
         const hex = parsedUrl.searchParams.get('hex') || '';
-        const response = await fetch(`https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`);
+        const response = await fetch(`https://adsb.lol/data/traces/${hex.slice(-2)}/trace_full_${hex}.json`, {
+          headers: { 'User-Agent': USER_AGENT },
+        });
         const data = await response.text();
         res.setHeader('Content-Type', 'application/json');
         return res.status(response.status).send(data);
       } else {
-        const response = await fetch('https://api.adsb.lol/v2/mil');
+        const response = await fetch('https://api.adsb.lol/v2/mil', {
+          headers: { 'User-Agent': USER_AGENT },
+        });
         const data = await response.text();
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'public, max-age=5');
@@ -148,7 +167,9 @@ export default async function handler(req, res) {
 
     // 7. Rocket Launches
     if (pathname.startsWith('launches')) {
-      const response = await fetch(`https://lldev.thespacedevs.com/2.2.0/launch/upcoming/?limit=20&mode=normal`);
+      const response = await fetch(`https://lldev.thespacedevs.com/2.2.0/launch/upcoming/?limit=20&mode=normal`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
       const data = await response.text();
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'public, max-age=300');
@@ -161,7 +182,9 @@ export default async function handler(req, res) {
       if (!firmsKey) {
         return res.status(200).json({ features: [], note: 'FIRMS_MAP_KEY not set' });
       }
-      const response = await fetch(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${firmsKey}/VIIRS_SNPP_NRT/world/1`);
+      const response = await fetch(`https://firms.modaps.eosdis.nasa.gov/api/area/csv/${firmsKey}/VIIRS_SNPP_NRT/world/1`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
       const data = await response.text();
       res.setHeader('Content-Type', 'text/plain');
       return res.status(response.status).send(data);
@@ -171,7 +194,9 @@ export default async function handler(req, res) {
     if (pathname.startsWith('weather-effects')) {
       const lat = parsedUrl.searchParams.get('latitude') || '0';
       const lon = parsedUrl.searchParams.get('longitude') || '0';
-      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m`);
+      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
       const data = await response.text();
       res.setHeader('Content-Type', 'application/json');
       return res.status(response.status).send(data);
@@ -179,7 +204,9 @@ export default async function handler(req, res) {
 
     // 10. Radio Browser
     if (pathname.startsWith('radio')) {
-      const response = await fetch(`https://de1.api.radio-browser.info/json/stations/topclick/100`);
+      const response = await fetch(`https://de1.api.radio-browser.info/json/stations/topclick/100`, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
       const data = await response.text();
       res.setHeader('Content-Type', 'application/json');
       return res.status(response.status).send(data);
