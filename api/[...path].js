@@ -1,14 +1,18 @@
 /**
  * Vercel Serverless API Proxy for BOTAZEZ (God's Eye View)
- * Handles all live data proxying and Groq voice intelligence natively on Vercel.
+ * Handles all live data feeds, satellite orbital elements, aircraft radar, and Groq voice AI.
  */
 
 import https from 'node:https';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 let _openskyToken = null;
 let _openskyTokenExpiry = 0;
+let _openskyCacheBody = null;
+let _openskyCacheTime = 0;
 
 function httpsFetch(urlStr, options = {}) {
   return new Promise((resolve, reject) => {
@@ -42,7 +46,6 @@ async function getOpenSkyToken() {
 
   const clientId = process.env.OPENSKY_CLIENT_ID;
   const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return null;
 
   try {
     const body = `grant_type=client_credentials&client_id=${encodeURIComponent(clientId)}&client_secret=${encodeURIComponent(clientSecret)}`;
@@ -70,8 +73,27 @@ async function getOpenSkyToken() {
   return null;
 }
 
+function getLocalCache(filename) {
+  try {
+    const possiblePaths = [
+      path.join(process.cwd(), 'api', 'cache', filename),
+      path.join(process.cwd(), '.gev-cache', filename),
+    ];
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf8');
+        const parsed = JSON.parse(raw);
+        return parsed.body || parsed;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
-  // Enable CORS
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -85,11 +107,12 @@ export default async function handler(req, res) {
   const search = parsedUrl.search;
 
   try {
-    // 1. Groq Chat & Map Intelligence
+    // 1. Groq Voice Intelligence
     if (pathname.startsWith('groq/chat')) {
       const groqKey = process.env.GROQ_API_KEY;
-      if (!groqKey) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on Vercel' });
-
+      if (!groqKey) {
+        return res.status(503).json({ error: 'GROQ_API_KEY is not configured on Vercel' });
+      }
       let userPrompt = '';
       if (req.body) {
         if (typeof req.body === 'string') {
@@ -112,7 +135,7 @@ export default async function handler(req, res) {
           messages: [
             {
               role: 'system',
-              content: 'You are ARDI, the voice intelligence system for BOTAZEZ Global Intelligence Platform. Be concise, authoritative, and helpful (1-3 sentences). If the user asks to navigate somewhere, mention the destination.'
+              content: 'You are ARDI, the voice intelligence system for BOTAZEZ Global Intelligence Platform. Be concise, authoritative, and helpful (1-3 sentences). When user asks to fly or navigate, confirm the destination.'
             },
             { role: 'user', content: userPrompt }
           ],
@@ -123,7 +146,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ reply });
     }
 
-    // 2. OpenSky Live Aircraft
+    // 2. OpenSky Live Aircraft Radar
     if (pathname.startsWith('opensky')) {
       if (pathname.includes('track')) {
         const icao24 = parsedUrl.searchParams.get('icao24') || '';
@@ -135,19 +158,84 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'application/json');
         return res.status(response.status).send(data);
       } else {
+        const now = Date.now();
+        // Return 6-second in-memory cache if available to prevent rate-limiting
+        if (_openskyCacheBody && (now - _openskyCacheTime < 6000)) {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('X-Flight-Source', 'OpenSky Network (Cache)');
+          return res.status(200).send(_openskyCacheBody);
+        }
+
         const token = await getOpenSkyToken();
         const headers = { Accept: 'application/json' };
         if (token) headers.Authorization = `Bearer ${token}`;
-        
-        const upstream = await httpsFetch('https://opensky-network.org/api/states/all?extended=1', { headers });
-        const data = await upstream.text();
+
+        try {
+          const upstream = await httpsFetch('https://opensky-network.org/api/states/all?extended=1', { headers });
+          if (upstream.status === 200) {
+            const data = await upstream.text();
+            _openskyCacheBody = data;
+            _openskyCacheTime = now;
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('X-Flight-Source', 'OpenSky Network');
+            res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
+            return res.status(200).send(data);
+          }
+        } catch (err) {
+          console.warn('OpenSky fetch failed, checking cache / adsb.lol fallback:', err);
+        }
+
+        if (_openskyCacheBody) {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('X-Flight-Source', 'OpenSky Network (Stale)');
+          return res.status(200).send(_openskyCacheBody);
+        }
+
+        // Fallback to adsb.lol military snapshot
+        const fallback = await httpsFetch('https://api.adsb.lol/v2/mil');
+        const data = await fallback.text();
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'public, max-age=5, s-maxage=5');
-        return res.status(upstream.status).send(data);
+        return res.status(fallback.status).send(data);
       }
     }
 
-    // 3. Realtime Token & Debug Log
+    // 3. CelesTrak Satellite TLE Elements
+    if (pathname.startsWith('celestrak')) {
+      const group = pathname.replace(/^celestrak\/?/, '').split('?')[0] || 'stations';
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+
+      try {
+        const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(group)}&FORMAT=tle`;
+        const upstream = await httpsFetch(url, {
+          headers: { 'User-Agent': 'gods-eye-view-celestrak-proxy/1.0 (+https://github.com/bilawalsidhu/gods-eye-view)' }
+        });
+        if (upstream.status === 200) {
+          const body = await upstream.text();
+          if (/^1 /m.test(body)) {
+            return res.status(200).send(body);
+          }
+        }
+      } catch (err) {
+        console.warn(`CelesTrak fetch failed for ${group}, using local cache:`, err);
+      }
+
+      // Serve local bundled TLE cache
+      const cached = getLocalCache(`celestrak-${group}.json`);
+      if (cached) {
+        return res.status(200).send(cached);
+      }
+
+      // If specific group cache not found, fallback to active or stations
+      const activeCache = getLocalCache('celestrak-active.json') || getLocalCache('celestrak-stations.json');
+      if (activeCache) {
+        return res.status(200).send(activeCache);
+      }
+
+      return res.status(502).send('Satellite feed temporarily unavailable');
+    }
+
+    // 4. Realtime Token & Debug Log
     if (pathname.startsWith('realtime/debug-log')) {
       return res.status(200).json({ ok: true });
     }
@@ -177,32 +265,7 @@ export default async function handler(req, res) {
       return res.status(response.status).send(data);
     }
 
-    // 4. Celestrak Satellites
-    if (pathname.startsWith('celestrak')) {
-      const upstream = await httpsFetch(`https://celestrak.org/NORAD/elements/gp.php${search}`);
-      const data = await upstream.text();
-      res.setHeader('Content-Type', 'text/plain');
-      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
-      return res.status(upstream.status).send(data);
-    }
-
-    // 5. Overpass (Roads / Buildings / Features)
-    if (pathname.startsWith('overpass')) {
-      const body = typeof req.body === 'string' ? req.body : new URLSearchParams(req.body || {}).toString();
-      const response = await httpsFetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Content-Length': Buffer.byteLength(body),
-        },
-        body,
-      });
-      const data = await response.text();
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(response.status).send(data);
-    }
-
-    // 6. Military Aircraft (adsb.lol)
+    // 5. Military Aircraft (adsb.lol)
     if (pathname.startsWith('adsblol')) {
       if (pathname.includes('trace')) {
         const hex = parsedUrl.searchParams.get('hex') || '';
@@ -219,16 +282,44 @@ export default async function handler(req, res) {
       }
     }
 
-    // 7. Rocket Launches
+    // 6. Rocket Launches
     if (pathname.startsWith('launches')) {
-      const response = await httpsFetch(`https://lldev.thespacedevs.com/2.2.0/launch/upcoming/?limit=20&mode=normal`);
+      try {
+        const response = await httpsFetch('https://lldev.thespacedevs.com/2.2.0/launch/upcoming/?limit=20&mode=normal');
+        if (response.status === 200) {
+          const data = await response.text();
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'public, max-age=300');
+          return res.status(200).send(data);
+        }
+      } catch {
+        // use cache
+      }
+      const cached = getLocalCache('launch-library-2-v2.3.json');
+      if (cached) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(200).send(JSON.stringify(cached));
+      }
+      return res.status(200).json({ results: [] });
+    }
+
+    // 7. Overpass (OpenStreetMap)
+    if (pathname.startsWith('overpass')) {
+      const body = typeof req.body === 'string' ? req.body : new URLSearchParams(req.body || {}).toString();
+      const response = await httpsFetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        body,
+      });
       const data = await response.text();
       res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Cache-Control', 'public, max-age=300');
       return res.status(response.status).send(data);
     }
 
-    // 8. NASA FIRMS (Active Fires)
+    // 8. NASA FIRMS (Active Thermal Fires)
     if (pathname.startsWith('firms')) {
       const firmsKey = process.env.FIRMS_MAP_KEY;
       if (!firmsKey) {
@@ -240,7 +331,7 @@ export default async function handler(req, res) {
       return res.status(response.status).send(data);
     }
 
-    // 9. Weather Observations (Open-Meteo)
+    // 9. Weather Effects (Open-Meteo)
     if (pathname.startsWith('weather-effects')) {
       const lat = parsedUrl.searchParams.get('latitude') || '0';
       const lon = parsedUrl.searchParams.get('longitude') || '0';
@@ -252,7 +343,7 @@ export default async function handler(req, res) {
 
     // 10. Radio Browser
     if (pathname.startsWith('radio')) {
-      const response = await httpsFetch(`https://de1.api.radio-browser.info/json/stations/topclick/100`);
+      const response = await httpsFetch('https://de1.api.radio-browser.info/json/stations/topclick/100');
       const data = await response.text();
       res.setHeader('Content-Type', 'application/json');
       return res.status(response.status).send(data);
