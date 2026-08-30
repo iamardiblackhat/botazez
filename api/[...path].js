@@ -17,6 +17,7 @@ let _openskyCacheTime = 0;
 function httpsFetch(urlStr, options = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
+    const timeout = options.timeout || 6000;
     const reqOptions = {
       method: options.method || 'GET',
       hostname: url.hostname,
@@ -32,6 +33,11 @@ function httpsFetch(urlStr, options = {}) {
       let data = '';
       res.on('data', (chunk) => (data += chunk));
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, text: () => Promise.resolve(data) }));
+    });
+
+    req.setTimeout(timeout, () => {
+      req.destroy();
+      reject(new Error(`Request timeout (${timeout}ms)`));
     });
 
     req.on('error', (err) => reject(err));
