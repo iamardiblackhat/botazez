@@ -133,6 +133,16 @@ async function init() {
     // 120 Hz hardware; a no-op on 60 Hz displays. (perf item 2)
     viewer.targetFrameRate = 60;
 
+    // Enable responsive camera controls and zoom
+    const controller = viewer.scene.screenSpaceCameraController;
+    controller.enableZoom = true;
+    controller.enableRotate = true;
+    controller.enableTranslate = true;
+    controller.enableTilt = true;
+    controller.enableLook = true;
+    controller.minimumZoomDistance = 10.0;
+    controller.maximumZoomDistance = Infinity;
+
     // Register per-layer data attribution into the "Data attribution" popover.
     // Required by each source's license (ODbL, CC BY-NC-SA, NASA FIRMS, etc.);
     // strings are verbatim from DATA_SOURCES.md. Static + always-present in the

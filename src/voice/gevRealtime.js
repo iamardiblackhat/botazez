@@ -506,6 +506,10 @@ export class GevRealtimeController {
       }
       const diagnostics = this.connectionDiagnostics();
       this.stop({ preserveStatus: true });
+      if (String(error?.message || '').includes('OPENAI_API_KEY')) {
+        this.setStatus('idle', 'VOICE STANDBY');
+        return;
+      }
       this.reportError('Realtime connection', error, diagnostics);
     }
   }
