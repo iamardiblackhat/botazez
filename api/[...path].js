@@ -1,6 +1,6 @@
 /**
  * Vercel Serverless API Proxy for BOTAZEZ (God's Eye View)
- * Handles all live data proxying natively on Vercel.
+ * Handles all live data proxying and Groq voice intelligence natively on Vercel.
  */
 
 import https from 'node:https';
@@ -85,7 +85,45 @@ export default async function handler(req, res) {
   const search = parsedUrl.search;
 
   try {
-    // 1. OpenSky Live Aircraft
+    // 1. Groq Chat & Map Intelligence
+    if (pathname.startsWith('groq/chat')) {
+      const groqKey = process.env.GROQ_API_KEY;
+      if (!groqKey) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on Vercel' });
+
+      let userPrompt = '';
+      if (req.body) {
+        if (typeof req.body === 'string') {
+          try { userPrompt = JSON.parse(req.body).message || req.body; } catch { userPrompt = req.body; }
+        } else {
+          userPrompt = req.body.message || req.body.prompt || JSON.stringify(req.body);
+        }
+      } else {
+        userPrompt = parsedUrl.searchParams.get('q') || 'Status check';
+      }
+
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-oss-120b',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are ARDI, the voice intelligence system for BOTAZEZ Global Intelligence Platform. Be concise, authoritative, and helpful (1-3 sentences). If the user asks to navigate somewhere, mention the destination.'
+            },
+            { role: 'user', content: userPrompt }
+          ],
+        }),
+      });
+      const data = await groqRes.json();
+      const reply = data.choices?.[0]?.message?.content || 'Command acknowledged.';
+      return res.status(200).json({ reply });
+    }
+
+    // 2. OpenSky Live Aircraft
     if (pathname.startsWith('opensky')) {
       if (pathname.includes('track')) {
         const icao24 = parsedUrl.searchParams.get('icao24') || '';
@@ -109,7 +147,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. OpenAI Realtime Voice Token
+    // 3. Realtime Token / Voice Standby
     if (pathname.startsWith('realtime/token')) {
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
@@ -134,15 +172,6 @@ export default async function handler(req, res) {
       const data = await response.text();
       res.setHeader('Content-Type', 'application/json');
       return res.status(response.status).send(data);
-    }
-
-    // 3. OpenAI HUD Summary
-    if (pathname.startsWith('openai/hud-summary')) {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        return res.status(503).json({ error: 'OPENAI_API_KEY is not configured on Vercel' });
-      }
-      return res.status(200).json({ summary: 'Voice & Intelligence Engine active.' });
     }
 
     // 4. Celestrak Satellites
