@@ -399,7 +399,7 @@ function initNavigationHUD({ viewer, sceneDirector, dataManager, styleManager })
       scenePanel.scrollIntoView({ behavior: 'smooth' });
     }
     if (sceneDirector) {
-      sceneDirector.runNextScene();
+      sceneDirector.startScene();
     }
   };
 
