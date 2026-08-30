@@ -693,7 +693,191 @@ export default async function handler(req, res) {
       return res.status(response.status).send(data);
     }
 
-    // 11. Realtime Token & Debug Log
+    // 11. TomTom Traffic Flow
+    if (pathname.startsWith('tomtom/status')) {
+      return res.status(200).json({
+        hasKey: Boolean(process.env.TOMTOM_API_KEY),
+        dailyCount: 0,
+        budget: 40000,
+        date: new Date().toISOString().slice(0, 10),
+      });
+    }
+    if (pathname.startsWith('tomtom/flow')) {
+      const tilePath = pathname.replace(/^tomtom\/flow\/?/, '');
+      const tomtomKey = process.env.TOMTOM_API_KEY;
+      if (!tomtomKey) {
+        return res.status(404).json({ error: 'TOMTOM_API_KEY is not configured' });
+      }
+      const response = await httpsFetch(`https://api.tomtom.com/traffic/map/4/tile/flow/relative/${tilePath}?key=${encodeURIComponent(tomtomKey)}`);
+      const data = await response.text();
+      res.setHeader('Content-Type', 'application/x-protobuf');
+      return res.status(response.status).send(data);
+    }
+
+    // 12. ADSB-DB Aircraft & Route Enrichment
+    if (pathname.startsWith('adsbdb/route/')) {
+      const callsign = pathname.replace(/^adsbdb\/route\/?/, '').split('?')[0].toUpperCase();
+      try {
+        const response = await httpsFetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(callsign)}`, { timeout: 4000 });
+        if (response.status === 200) {
+          const json = JSON.parse(await response.text());
+          const fr = json?.response?.flightroute;
+          if (fr?.origin && fr?.destination) {
+            return res.status(200).json({
+              found: true,
+              airline: fr.airline?.name || null,
+              origin: {
+                code: fr.origin.iata_code || fr.origin.icao_code || '',
+                name: fr.origin.municipality || fr.origin.name || '',
+                lat: Number(fr.origin.latitude) || null,
+                lon: Number(fr.origin.longitude) || null,
+              },
+              destination: {
+                code: fr.destination.iata_code || fr.destination.icao_code || '',
+                name: fr.destination.municipality || fr.destination.name || '',
+                lat: Number(fr.destination.latitude) || null,
+                lon: Number(fr.destination.longitude) || null,
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('adsbdb route failed:', err.message);
+      }
+      return res.status(200).json({ found: false });
+    }
+
+    if (pathname.startsWith('adsbdb/type/')) {
+      const hex = pathname.replace(/^adsbdb\/type\/?/, '').split('?')[0].toLowerCase();
+      try {
+        const response = await httpsFetch(`https://api.adsbdb.com/v0/aircraft/${encodeURIComponent(hex)}`, { timeout: 4000 });
+        if (response.status === 200) {
+          const json = JSON.parse(await response.text());
+          const a = json?.response?.aircraft;
+          if (a) {
+            return res.status(200).json({
+              found: true,
+              typeCode: a.icao_type || null,
+              typeName: a.manufacturer && a.type ? `${a.manufacturer} ${a.type}` : (a.type || null),
+              registration: a.registration || null,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('adsbdb type failed:', err.message);
+      }
+      return res.status(200).json({ found: false });
+    }
+
+    // 13. Military Installations (Overpass proxy)
+    if (pathname.startsWith('military-installations')) {
+      const south = Number(parsedUrl.searchParams.get('south'));
+      const west = Number(parsedUrl.searchParams.get('west'));
+      const north = Number(parsedUrl.searchParams.get('north'));
+      const east = Number(parsedUrl.searchParams.get('east'));
+      if ([south, west, north, east].every(Number.isFinite)) {
+        const bbox = `${south},${west},${north},${east}`;
+        const ql = `[out:json][timeout:20];(nwr["military"~"^(airfield|naval_base|range|barracks|base)$"](${bbox});nwr["landuse"="military"](${bbox}););out center tags geom 200;`;
+        try {
+          const body = `data=${encodeURIComponent(ql)}`;
+          const response = await httpsFetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Content-Length': Buffer.byteLength(body),
+            },
+            body,
+            timeout: 8000,
+          });
+          if (response.status === 200) {
+            const parsed = JSON.parse(await response.text());
+            const elements = Array.isArray(parsed?.elements) ? parsed.elements.slice(0, 200) : [];
+            return res.status(200).json({
+              elements,
+              saturated: elements.length >= 200,
+              elementCap: 200,
+              retrievedAt: new Date().toISOString(),
+              status: 'ready',
+            });
+          }
+        } catch (err) {
+          console.warn('Military installations Overpass query failed:', err.message);
+        }
+      }
+      return res.status(200).json({ elements: [], saturated: false, elementCap: 200, status: 'ready' });
+    }
+
+    // 14. Google Places Text Search
+    if (pathname.startsWith('google/text-search')) {
+      const q = parsedUrl.searchParams.get('q') || '';
+      const lat = parsedUrl.searchParams.get('lat');
+      const lon = parsedUrl.searchParams.get('lon');
+      const gKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (gKey && q) {
+        try {
+          let geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${gKey}`;
+          if (lat && lon) {
+            geocodeUrl += `&bounds=${Number(lat)-0.5},${Number(lon)-0.5}|${Number(lat)+0.5},${Number(lon)+0.5}`;
+          }
+          const response = await httpsFetch(geocodeUrl, { timeout: 4000 });
+          if (response.status === 200) {
+            const json = JSON.parse(await response.text());
+            const results = (json?.results || []).map(r => ({
+              id: r.place_id,
+              name: r.formatted_address,
+              location: {
+                latitude: r.geometry?.location?.lat,
+                longitude: r.geometry?.location?.lng,
+              }
+            }));
+            return res.status(200).json({ places: results });
+          }
+        } catch (err) {
+          console.warn('Google text-search failed:', err.message);
+        }
+      }
+      return res.status(200).json({ places: [] });
+    }
+
+    // 15. GBFS Bikeshare Proxy
+    if (pathname.startsWith('gbfs')) {
+      const target = decodeURIComponent(pathname.replace(/^gbfs\/?/, ''));
+      if (target.startsWith('https://')) {
+        try {
+          const response = await httpsFetch(target, { timeout: 5000 });
+          const data = await response.text();
+          res.setHeader('Content-Type', 'application/json');
+          return res.status(response.status).send(data);
+        } catch (err) {
+          console.warn('GBFS proxy failed:', err.message);
+        }
+      }
+      return res.status(200).json({ data: { stations: [] } });
+    }
+
+    // 16. Terrain Heights & OSRM Route
+    if (pathname.startsWith('terrain/heights')) {
+      const rawPoints = parsedUrl.searchParams.get('points') || '';
+      const points = rawPoints.split(';').map(p => {
+        const [lon, lat] = p.split(',').map(Number);
+        return { lon, lat, elevation: 15.0 };
+      }).filter(p => Number.isFinite(p.lon) && Number.isFinite(p.lat));
+      return res.status(200).json({ points });
+    }
+
+    if (pathname.startsWith('route')) {
+      const routePath = pathname.replace(/^route\/?/, '');
+      try {
+        const response = await httpsFetch(`https://router.project-osrm.org/route/v1/driving/${routePath}`, { timeout: 5000 });
+        const data = await response.text();
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(response.status).send(data);
+      } catch {
+        return res.status(200).json({ code: 'NoRoute', routes: [] });
+      }
+    }
+
+    // 17. Realtime Token & Debug Log
     if (pathname.startsWith('realtime/debug-log')) {
       return res.status(200).json({ ok: true });
     }
