@@ -6978,21 +6978,30 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
     width: auto;
     max-height: none;
     overflow-y: auto;
+    pointer-events: none;
   }
 
   #right-context-rail > #pp-toggles {
     width: 100%;
+    pointer-events: auto;
   }
 
-  #right-context-rail #pp-toggles.collapsed .pp-header-row,
-  #right-context-rail #cctv-panel,
+  #right-context-rail #pp-toggles.collapsed,
   #right-context-rail #cctv-panel.collapsed,
-  #right-context-rail #radio-panel,
   #right-context-rail #radio-panel.collapsed,
-  #right-context-rail #global-context-panel,
-  #right-context-rail #global-context-panel.collapsed {
-    width: 100%;
+  #right-context-rail #global-context-panel.collapsed,
+  #right-context-rail > [data-panel-id].collapsed {
+    width: fit-content !important;
+    min-width: 100px !important;
+    max-width: 145px !important;
+    margin-left: auto !important;
+    pointer-events: auto;
   }
+
+  #right-context-rail #pp-toggles.collapsed .pp-header-row {
+    width: auto !important;
+  }
+
   .context-radio-mini {
     right: -38px;
     width: min(244px, calc(100vw - 32px));
