@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, MapPin, Navigation, Building2, Globe2, Landmark } from 'lucide-react';
+import { searchPlaces } from '@/lib/geosearch';
 
 /* ═══════════════════════════════════════════════════════════════
    OSIRIS — Enhanced Search / Locate Bar
@@ -165,24 +166,16 @@ export default function SearchBar({ onLocate, alwaysExpanded = false }: SearchBa
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        // Use addressdetails=1 for better type detection and limit=8 for more results
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&addressdetails=1&extratags=1`,
-          { headers: { 'Accept-Language': 'en', 'User-Agent': 'OSIRIS-Intelligence-Platform/1.0' } }
-        );
-        const data = await res.json();
-        setResults(data.map((r: any) => {
-          const zoom = getZoomForType(r.type, r.class, r.boundingbox);
-          return {
-            label: r.display_name,
-            lat: parseFloat(r.lat),
-            lng: parseFloat(r.lon),
-            type: r.type || 'unknown',
-            importance: r.importance || 0,
-            category: r.class || 'unknown',
-            zoomLevel: zoom,
-          };
-        }));
+        const hits = await searchPlaces(q);
+        setResults(hits.map((r) => ({
+          label: r.context ? `${r.name}, ${r.context}` : r.name,
+          lat: r.lat,
+          lng: r.lng,
+          type: r.kind || 'place',
+          importance: r.score || 0.5,
+          category: r.kind || 'place',
+          zoomLevel: r.kind === 'address' ? 18 : (r.kind === 'street' || r.kind === 'poi') ? 16 : r.kind === 'city' ? 12 : r.kind === 'region' ? 8 : r.kind === 'country' ? 5 : 13,
+        })));
       } catch { setResults([]); }
       setLoading(false);
     }, 300);

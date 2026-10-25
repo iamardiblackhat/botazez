@@ -39,10 +39,12 @@ interface DashboardRowProps {
 
 export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCamera }: DashboardRowProps) {
   const [tvCategory, setTvCategory] = useState<'all' | 'mainstream' | 'finance' | 'conflict' | 'government'>('all');
+  const [cyberTab, setCyberTab] = useState<'attacks' | 'cves'>('attacks');
 
   const news = data.news || [];
   const cams = data.cameras || [];
   const threats = data.malware_threats || [];
+  const cves = data.cve_threats || [];
   const feeds = tvCategory === 'all' ? BUILTIN_FEEDS : BUILTIN_FEEDS.filter(f => f.category === tvCategory);
 
   return (
@@ -109,15 +111,65 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
       </CardShell>
 
       {/* CYBER / TECH THREATS */}
-      <CardShell icon={ShieldAlert} title="CYBER THREATS" count={threats.length} accent="#FF3D3D">
-        {threats.length === 0 ? (
-          <div className="px-3 py-6 text-center text-[10px] font-mono text-[var(--text-muted)] tracking-widest">NO ACTIVE THREATS...</div>
-        ) : threats.slice(0, 20).map((t: any, i: number) => (
-          <div key={i} className="px-3 py-2 hover:bg-[var(--hover-accent)] transition-colors cursor-pointer" onClick={() => t.lat && t.lng && onLocate(t.lat, t.lng)}>
-            <div className="text-[10.5px] text-[#FF3D3D] font-bold truncate">{t.malware || t.threat_type || 'Unknown Threat'}</div>
-            <div className="text-[9px] font-mono text-[var(--text-muted)] truncate">{t.ip} · {t.country || 'UNKNOWN'}</div>
-          </div>
-        ))}
+      <CardShell
+        icon={ShieldAlert}
+        title="CYBER THREATS"
+        count={cyberTab === 'attacks' ? threats.length : cves.length}
+        accent="#FF3D3D"
+      >
+        <div className="flex border-b border-[var(--border-secondary)] bg-black/60 px-2 py-1 gap-1 shrink-0">
+          <button
+            onClick={() => setCyberTab('attacks')}
+            className={`px-2 py-0.5 rounded text-[9px] font-mono tracking-wider transition-colors ${cyberTab === 'attacks' ? 'bg-[#FF3D3D]/20 text-[#FF3D3D] border border-[#FF3D3D]/40' : 'text-white/40 hover:text-white/70'}`}
+          >
+            ATTACKS ({threats.length})
+          </button>
+          <button
+            onClick={() => setCyberTab('cves')}
+            className={`px-2 py-0.5 rounded text-[9px] font-mono tracking-wider transition-colors ${cyberTab === 'cves' ? 'bg-[#FF3D3D]/20 text-[#FF3D3D] border border-[#FF3D3D]/40' : 'text-white/40 hover:text-white/70'}`}
+          >
+            CISA ZERO-DAYS ({cves.length})
+          </button>
+        </div>
+
+        {cyberTab === 'attacks' ? (
+          threats.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[10px] font-mono text-[var(--text-muted)] tracking-widest">CONNECTING SANS ISC FEED...</div>
+          ) : threats.slice(0, 30).map((t: any, i: number) => (
+            <div
+              key={i}
+              className="px-3 py-2 hover:bg-[var(--hover-accent)] transition-colors cursor-pointer"
+              onClick={() => t.lat && t.lng && onLocate(t.lat, t.lng)}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10.5px] text-[#FF3D3D] font-bold truncate">{t.malware || t.threat_type || 'Unknown Threat'}</span>
+                {t.attacks ? <span className="text-[9px] font-mono text-white/50">{t.attacks} hits</span> : null}
+              </div>
+              <div className="text-[9px] font-mono text-[var(--text-muted)] truncate">
+                {t.ip} · {t.city ? `${t.city}, ` : ''}{t.country || 'UNKNOWN'}
+              </div>
+            </div>
+          ))
+        ) : (
+          cves.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[10px] font-mono text-[var(--text-muted)] tracking-widest">LOADING CISA KEV...</div>
+          ) : cves.slice(0, 20).map((c: any, i: number) => (
+            <div
+              key={i}
+              className="px-3 py-2 hover:bg-[var(--hover-accent)] transition-colors cursor-pointer"
+              onClick={() => window.open(`https://nvd.nist.gov/vuln/detail/${c.id}`, '_blank')}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[10.5px] text-[#FF5252] font-mono font-bold truncate">{c.id}</span>
+                <span className="text-[8px] font-mono px-1 py-0.2 bg-red-950/80 text-red-400 border border-red-500/30 rounded">CRITICAL</span>
+              </div>
+              <div className="text-[9.5px] text-[var(--text-primary)] truncate mt-0.5">{c.name || `${c.vendor} ${c.product}`}</div>
+              <div className="text-[8.5px] font-mono text-[var(--text-muted)] truncate">
+                {c.vendor} {c.product} · Due: {c.due || 'ASAP'}
+              </div>
+            </div>
+          ))
+        )}
       </CardShell>
     </div>
   );

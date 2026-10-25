@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 
-// Cyber threat intelligence from public feeds
-// Inspired by WorldMonitor's infrastructure tracking
+export const dynamic = 'force-dynamic';
+
+/**
+ * OSIRIS / BOTAZEZ — Cyber Threat & CVE Intelligence
+ * Authoritative US DHS CISA Known Exploited Vulnerabilities (KEV)
+ */
 
 export async function GET() {
   try {
@@ -10,50 +14,49 @@ export async function GET() {
     // 1. CISA Known Exploited Vulnerabilities (authoritative US govt source)
     try {
       const res = await fetch('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', {
-        
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'OSIRIS-Botazez/5.0', 'Accept': 'application/json' },
       });
       if (res.ok) {
         const data = await res.json();
-        const recent = (data.vulnerabilities || [])
+        const allVulns = data.vulnerabilities || [];
+        
+        // Filter by last 60 days or take the latest 25
+        let recent = allVulns
           .filter((v: any) => {
             const added = new Date(v.dateAdded);
             const daysAgo = (Date.now() - added.getTime()) / (1000 * 60 * 60 * 24);
-            return daysAgo <= 30;
-          })
-          .slice(0, 10)
-          .map((v: any) => ({
-            id: v.cveID,
-            name: v.vulnerabilityName,
-            vendor: v.vendorProject,
-            product: v.product,
-            severity: 'CRITICAL',
-            date: v.dateAdded,
-            due: v.dueDate,
-            source: 'CISA KEV',
-          }));
-        results.threats.push(...recent);
-        results.stats.cisa_total = data.vulnerabilities?.length || 0;
-      }
-    } catch (e) { console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e); }
-
-    // 2. Shadowserver honeypot stats (global attack surface)
-    try {
-      const res = await fetch('https://dashboard.shadowserver.org/statistics/combined/map/', {
+            return daysAgo <= 60;
+          });
         
-        headers: { 'Accept': 'application/json' },
-      });
-      if (res.ok) {
-        results.stats.shadowserver = 'active';
+        if (recent.length < 15) {
+          recent = allVulns.slice(-25).reverse();
+        }
+
+        results.threats = recent.slice(0, 25).map((v: any) => ({
+          id: v.cveID,
+          name: v.vulnerabilityName,
+          vendor: v.vendorProject,
+          product: v.product,
+          description: v.shortDescription,
+          severity: 'CRITICAL',
+          date: v.dateAdded,
+          due: v.dueDate,
+          source: 'CISA KEV',
+        }));
+        results.stats.cisa_total = allVulns.length;
       }
-    } catch {
-      results.stats.shadowserver = 'unavailable';
+    } catch (e) {
+      console.warn('[OSIRIS] CISA KEV fetch error:', e instanceof Error ? e.message : e);
     }
 
-    // 3. Aggregate stats
+    // 2. Aggregate stats
     results.stats.active_cves = results.threats.length;
     results.stats.threat_level = results.threats.length >= 8 ? 'CRITICAL' : results.threats.length >= 4 ? 'HIGH' : 'ELEVATED';
 
-    return NextResponse.json(results);
+    return NextResponse.json(results, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch {
     return NextResponse.json({ threats: [], stats: {}, error: 'Failed' }, { status: 500 });
   }

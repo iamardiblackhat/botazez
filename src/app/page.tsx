@@ -371,6 +371,8 @@ export default function Dashboard() {
     const eqTransform = (data: any) => ({ earthquakes: (data.features || []).map((f: any) => ({ id: f.id, lat: f.geometry?.coordinates?.[1] || 0, lng: f.geometry?.coordinates?.[0] || 0, depth: f.geometry?.coordinates?.[2] || 0, magnitude: f.properties?.mag, place: f.properties?.place, time: f.properties?.time, url: f.properties?.url, tsunami: f.properties?.tsunami, type: f.properties?.type, felt: f.properties?.felt, alert: f.properties?.alert })) });
     fetchEndpoint(eqUrl, eqTransform);
     fetchEndpoint('/api/news');
+    fetchEndpoint('/api/malware', d => ({ malware_threats: d.threats }));
+    fetchEndpoint('/api/cyber-threats', d => ({ cve_threats: d.threats, cyber_stats: d.stats }));
     const marketTimer = setTimeout(() => fetchEndpoint('/api/markets', d => ({ markets: d })), 800);
 
     // Priority 2: Space Weather (needed for MarketsPanel)
@@ -386,6 +388,8 @@ export default function Dashboard() {
       setInterval(() => fetchEndpoint(eqUrl, eqTransform), 900000),  // 15 min (was 5)
       setInterval(() => fetchEndpoint('/api/news'), 1800000),        // 30 min (was 10)
       setInterval(() => fetchEndpoint('/api/markets', d => ({ markets: d })), 900000), // 15 min (was 5)
+      setInterval(() => fetchEndpoint('/api/malware', d => ({ malware_threats: d.threats })), 300000), // 5 min
+      setInterval(() => fetchEndpoint('/api/cyber-threats', d => ({ cve_threats: d.threats, cyber_stats: d.stats })), 600000), // 10 min
     ];
     return () => {
       clearTimeout(marketTimer);
