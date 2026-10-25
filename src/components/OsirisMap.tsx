@@ -1,9 +1,56 @@
 'use client';
 
+import { buildGeometry, closeRing, drawReducer, initialDrawState, measure, type DrawAction, type DrawMode, type DrawProgress, type DrawResult, type DrawState } from '@/lib/draw';
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import { installTerrainTileProtocol } from '@/lib/terrain-tiles';
+import { CLOUDS_ATTRIBUTION, CLOUDS_CREDIT, CLOUDS_LAYER, frameTime } from '@/lib/live-clouds';
+import { createCloudLayer } from '@/lib/live-clouds-layer';
+import { WIND_ATTRIBUTION } from '@/lib/wind-layer';
+import { attachOi, type OiGlobe, type OiHover } from '@/lib/oi/globe';
+import { attachHighlights, type Highlighter } from '@/lib/oi/highlights';
+import type { Highlight } from '@/lib/oi/assist/tools';
+import { createSatelliteLayer, parseColor, SAT_MAX_ZOOM, type SatPoint } from '@/lib/satellite-layer';
+import { MAP_DEFAULTS, MAP_PALETTE_KEYS, readMapPalette, satColorFor, type MapPalette } from '@/lib/map-palette';
+import { STYLE_EVENT } from '@/lib/style-tokens';
+import { arrivalBeacons } from '@/lib/malware-intel';
+import { ALERT_KINDS, timeAgo, type AlertKind } from '@/lib/alert-digest';
+import SatelliteCard, { type SatelliteDetail } from '@/components/SatelliteCard';
+import CctvPreviews, { type PreviewCamera } from '@/components/CctvPreviews';
+import MapControls from '@/components/MapControls';
+import WindBar from '@/components/WindBar';
+import RainBar from '@/components/RainBar';
+import { DOCK } from '@/components/TimeBox';
+import LiveNewsPreviews, { type PreviewFeed } from '@/components/LiveNewsPreviews';
+import { attachTerrain, type TerrainStatus } from '@/lib/map-terrain';
+
+import { applyMapProjection } from '@/lib/map-projection';
+import { attachTransit, type TransitStatus } from '@/lib/transit-layer';
+
+/** The catalogue fields the satellite layer and its popup actually read. */
+interface SatelliteRow {
+  name: string;
+  lat: number;
+  lng: number;
+  alt: number;
+  color?: string;
+  mission?: string;
+  category?: string;
+  noradId?: string;
+}
 import 'maplibre-gl/dist/maplibre-gl.css';
-import * as satellite from 'satellite.js';
+
+/**
+ * Layers with their own click handlers. The satellite pick and the transit
+ * vehicles defer to these, and to nothing else: the basemap, the night shade
+ * and other fills are not click targets.
+ */
+const CLICKABLE_LAYERS: ReadonlySet<string> = new Set(['conflict-icons','cctv-dots','eq-circles','fires-heat',
+  'gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots',
+  'balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots',
+  'sdk-sea','sdk-air','sdk-intel','malware-dots','cyber-heads','gdelt-events-dots',
+  'cf-outage-dots','cf-attack-dots','flight-dots','military-dots','jet-dots','private-dots','alert-pin-dots',
+  'transit-coverage-dots']);
 
 interface OsirisMapProps {
   data: any;
@@ -12,13 +59,71 @@ interface OsirisMapProps {
   onMouseCoords?: (coords: { lat: number; lng: number }) => void;
   onRightClick?: (coords: { lat: number; lng: number }) => void;
   onViewStateChange?: (vs: { zoom: number; latitude: number }) => void;
-  flyToLocation?: { lat: number; lng: number; zoom?: number; ts: number } | null;
+  /** `alertId` also opens that Live Alert's pin once the camera arrives.
+   *  `duration` overrides the default 2 s flight. */
+  flyToLocation?: { lat: number; lng: number; zoom?: number; alertId?: string; duration?: number; ts: number } | null;
+  /** Fires once, when the map has drawn its first complete frame. */
+  onReady?: () => void;
+  /** Which Live Alerts to pin — the reports the feed is showing. Null pins them all. */
+  alertPinIds?: string[] | null;
   projection?: 'mercator' | 'globe';
+  terrainEnabled?: boolean;
+  terrainRetry?: number;
+  terrainFocus?: number;
+  onTerrainStatusChange?: (status: TerrainStatus) => void;
+  /** Turns a layer off, from the power button on its box (Wind, Rain). */
+  onLayerOff?: (key: string) => void;
+
   mapStyle?: string;
   sweepData?: any;
   scanTargets?: any[];
   demoMode?: boolean;
   theme?: 'core' | 'ghost';
+  drawnPolygons?: Array<{ id: string; name: string; geojson: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.LineString>; color: string }>;
+  arcgisLayers?: Array<{ id: string; title: string; geojson: any; color?: string; opacity?: number }>;
+  /** Active draw mode, or null when not drawing. */
+  drawMode?: DrawMode | null;
+  onDrawProgress?: (p: DrawProgress | null) => void;
+  onDrawCancel?: () => void;
+  /**
+   * Undo / finish / cancel driven from a button rather than the keyboard.
+   * Carries a seq so pressing the same button twice still registers.
+   */
+  drawCommand?: { action: DrawAction["type"]; seq: number } | null;
+  onDrawComplete?: (result: DrawResult) => void;
+  onMapCenter?: (coords: { lat: number; lng: number; bounds?: { west: number; south: number; east: number; north: number } }) => void;
+  /** What the Live Transit layer can see, for the layer panel; null while it is off. */
+  onTransitStatus?: (status: TransitStatus | null) => void;
+  /** Active turn-by-turn route drawn as a line with origin/destination pins. */
+  route?: {
+    geometry: { type: 'LineString'; coordinates: [number, number][] };
+    from: { lat: number; lng: number };
+    to: { lat: number; lng: number };
+    /** Unselected alternatives, drawn dimmed behind the active line. */
+    alternates?: Array<{ type: 'LineString'; coordinates: [number, number][] }>;
+    /** Highlighted portion for the step the operator has selected. */
+    activeSegment?: [number, number][] | null;
+  } | null;
+  /** Live position from the browser — drawn as a pulsing dot with accuracy ring. */
+  userLocation?: { lat: number; lng: number; accuracy?: number; heading?: number | null } | null;
+  /** Keep the camera centred on userLocation as it moves. */
+  followUser?: boolean;
+  /** Fired when the operator pans/zooms/rotates while follow mode is on. */
+  onFollowInterrupt?: () => void;
+  /** Live navigation: tighter zoom and the map turned to face travel direction. */
+  navigating?: boolean;
+  /** Corroborated endpoint airports for watched aircraft, keyed by icao24. */
+  aircraftAirports?: Record<string, Array<{ icao: string; iata?: string; city?: string; lat: number; lng: number }>>;
+  /** Hands the page OI's globe layer, so a run draws without re-rendering the map. Null when it goes. */
+  onOiGlobe?: (globe: OiGlobe | null) => void;
+  /** A piece of OI's analysis was clicked: an arc ("link:<id>") or a point ("a:<actor>", "e:<event>"…); null for empty map. */
+  onOiSelect?: (key: string | null) => void;
+  /** The pointer is over a piece of OI's analysis, or has left it. */
+  onOiHover?: (hover: OiHover | null) => void;
+  /** OI's camera started or stopped following the run. */
+  onOiFollow?: (following: boolean) => void;
+  /** What OI Assist has marked on the map: found things, named places, a searched area. */
+  oiHighlight?: Highlight | null;
 }
 
 function computeSolarTerminator(): [number, number][] {
@@ -43,56 +148,124 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-// Propagate one satellite's orbital record to a lon/lat at the given time and
-// return a GeoJSON point feature. Returns null if the orbit can't be resolved.
-function propagateSatFeature(
-  r: { satrec: any; color: string; name: string; mission: string; noradId: string; category: string; alt: number },
-  when: Date,
-  gmst: number
-): any | null {
-  try {
-    const pv = satellite.propagate(r.satrec, when);
-    const posEci = pv && (pv as any).position;
-    if (!posEci) return null;
-    const geo = satellite.eciToGeodetic(posEci as any, gmst);
-    let lng = satellite.degreesLong(geo.longitude);
-    const lat = satellite.degreesLat(geo.latitude);
-    if (!isFinite(lat) || !isFinite(lng)) return null;
-    // Normalise longitude to [-180, 180]
-    lng = ((lng + 540) % 360) - 180;
-    const altKm = Math.round(geo.height);
-    return {
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lng, lat] },
-      properties: { name: r.name, color: r.color, mission: r.mission, alt: altKm > 0 ? altKm : r.alt, noradId: r.noradId, category: r.category },
-    };
-  } catch {
-    return null;
-  }
+/** A colour, or an expression for one, as addLayer takes it. */
+type LayerColor = NonNullable<Extract<Parameters<maplibregl.Map['addLayer']>[0], { type: 'circle' }>['paint']>['circle-color'];
+
+/** A Live Alerts report as /api/news sends it — only the fields a pin reads. */
+interface PinnedReport {
+  id: string;
+  alert_kind?: string;
+  title: string;
+  source_name: string;
+  lean?: string | null;
+  published: string;
+  link?: string | null;
+  coords?: [number, number] | null;
+  place?: { name: string; label: string; precision: string } | null;
+  media?: { kind?: string; video?: string | null; thumb?: string | null; duration?: string | null } | null;
 }
 
-function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core' }: OsirisMapProps) {
+/** A report posted this recently gets the pulsing ring. */
+const ALERT_FRESH_MS = 15 * 60_000;
+
+/** Two right-clicks count as one double right-click this close in time… */
+const DOUBLE_RIGHT_MS = 500;
+/** …and this close on screen, so a second click elsewhere starts afresh. */
+const DOUBLE_RIGHT_SLOP_PX = 12;
+
+/** What a pin carries: flat, as map feature properties must be. */
+interface AlertPinProps {
+  id: string;
+  kind: AlertKind;
+  /** Reports pinned to this same place, this one included. */
+  stack: number;
+  /** Posted in the last quarter of an hour. */
+  fresh: boolean;
+  title: string;
+  source_name: string;
+  lean: string;
+  published: string;
+  link: string;
+  place_name: string;
+  place_label: string;
+  precision: string;
+  media_kind: string;
+  video: string;
+  thumb: string;
+  duration: string;
+}
+
+interface AlertPinFeature {
+  type: 'Feature';
+  geometry: { type: 'Point'; coordinates: [number, number] };
+  properties: AlertPinProps;
+}
+
+function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, onReady, flyToLocation, alertPinIds = null, projection = 'globe', terrainEnabled = false, terrainRetry = 0, terrainFocus = 0, onTerrainStatusChange, onLayerOff, mapStyle = 'dark', sweepData, scanTargets = [], demoMode = false, theme = 'core', drawnPolygons = [], arcgisLayers = [], drawMode = null, onDrawComplete, onDrawProgress, onDrawCancel, drawCommand = null, onMapCenter, onTransitStatus, route = null, userLocation = null, followUser = false, onFollowInterrupt, navigating = false, aircraftAirports = {}, onOiGlobe, onOiSelect, onOiHover, onOiFollow, oiHighlight = null }: OsirisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  /* The Live Alert pins currently drawn, and the opener for one of them, so
+     the feed's locate button can land on a pin and open it. */
+  const alertPinsRef = useRef<AlertPinFeature[]>([]);
+  const openAlertPinRef = useRef<((id: string) => void) | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const prevStyleRef = useRef(mapStyle);
 
-  // ── Live satellite orbit animation ──
-  // satSpeed is a time-multiplier: 1× = true real-time, higher = orbits sweep faster.
-  const [satSpeed, setSatSpeed] = useState(60);
-  const [satPlaying, setSatPlaying] = useState(true);
-  const [satActive, setSatActive] = useState(false); // is any satellite layer on?
-  const satSpeedRef = useRef(satSpeed);
-  const satPlayingRef = useRef(satPlaying);
-  useEffect(() => { satSpeedRef.current = satSpeed; }, [satSpeed]);
-  useEffect(() => { satPlayingRef.current = satPlaying; }, [satPlaying]);
-  // Active satellite selection with precomputed SGP4 records (satrecs).
-  const satRecordsRef = useRef<Array<{ satrec: any; color: string; name: string; mission: string; noradId: string; category: string; alt: number }>>([]);
-  // Simulated clock: wall-clock offset (ms) that advances by dt × speed each frame.
-  const simOffsetRef = useRef(0);
-  const lastFrameRef = useRef(0);
-  const rafRef = useRef<number | null>(null);
+  // Do not replay an earlier explicit zoom request after theme/retry remounts.
+  const lastTerrainFocus = useRef(terrainFocus);
+  const wasNavigating = useRef(false);
+  /**
+   * What the map's own layers draw with, mirrored out of the `--map-*` custom
+   * properties. Held in state rather than read at each use so a change re-runs
+   * the recolour effects; held in a ref as well for the click handlers, which
+   * are registered once on load and would otherwise close over the first value.
+   */
+  const [palette, setPalette] = useState<MapPalette>(MAP_DEFAULTS);
+  const paletteRef = useRef(palette);
+  useEffect(() => { paletteRef.current = palette; }, [palette]);
+  const onReadyRef = useRef(onReady);
+  useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
+  const prevDrawnPolygonsRef = useRef<string[]>([]);
+  const prevArcgisLayersRef = useRef<string[]>([]);
+  const satLayerRef = useRef<ReturnType<typeof createSatelliteLayer> | null>(null);
+  const cloudLayerRef = useRef<ReturnType<typeof createCloudLayer> | null>(null);
+  const onOiGlobeRef = useRef(onOiGlobe);
+  const onOiSelectRef = useRef(onOiSelect);
+  const onOiHoverRef = useRef(onOiHover);
+  const onOiFollowRef = useRef(onOiFollow);
+  const oiGlobeRef = useRef<OiGlobe | null>(null);
+  useEffect(() => {
+    onOiGlobeRef.current = onOiGlobe;
+    onOiSelectRef.current = onOiSelect;
+    onOiHoverRef.current = onOiHover;
+    onOiFollowRef.current = onOiFollow;
+  }, [onOiGlobe, onOiSelect, onOiHover, onOiFollow]);
+  // pick() returns an index into the array last handed to setPoints, so the
+  // matching catalogue rows are kept in the same order to resolve it.
+  const satRowsRef = useRef<SatelliteRow[]>([]);
+  /** Index of the selected satellite in the array last handed to setPoints. */
+  const satPickedRef = useRef<number | null>(null);
+  /** The selection's NORAD id. The index moves whenever the catalogue is
+   *  re-polled and re-filtered; the id does not, so it is what identifies the
+   *  selection across a refresh and what discards a late orbit reply. */
+  const satSelectedIdRef = useRef<string | null>(null);
+  /** When the catalogue positions were propagated for, so an orbit can be drawn
+   *  around the marker rather than around the moment it was clicked. */
+  const satEpochRef = useRef<number | null>(null);
+  const [selectedSat, setSelectedSat] = useState<SatelliteDetail | null>(null);
+
+  /** Drops the selection: the ring, the orbit track and the readout together.
+   *  Leaving any one of them behind is what made a closed popup look like a
+   *  still-selected satellite. */
+  const clearSat = useCallback(() => {
+    if (satPickedRef.current === null && satSelectedIdRef.current === null) return;
+    satPickedRef.current = null;
+    satSelectedIdRef.current = null;
+    satLayerRef.current?.setSelected(null);
+    satLayerRef.current?.setOrbit(null);
+    setSelectedSat(null);
+  }, []);
+  const drawingCoordsRef = useRef<number[][]>([]);
 
   // Create aircraft icon on canvas (for WebGL symbol layer)
   const createIcon = useCallback((map: maplibregl.Map, id: string, color: string, size: number) => {
@@ -184,11 +357,28 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     // Select basemap style
     const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
+    const container = containerRef.current;
+    maplibregl.setWorkerUrl(`/vendor/maplibre/${maplibregl.getVersion()}/maplibre-gl-worker.mjs`);
+    /* Open on the whole globe, turned to the viewer's side of it. The UTC
+       offset is a free, instant stand-in for longitude (15° an hour), so the
+       fly-in to their city after the splash is a dive, not a spin round the
+       planet. This used to open on Bulgaria at zoom 6.5 for everyone. */
+    const facingLng = Math.max(-180, Math.min(180, -new Date().getTimezoneOffset() / 4));
+    const baseOptions = {
+      container,
       style: styleUrl,
-      center: [15, 20], zoom: 2.2, minZoom: 1.5, maxZoom: 18,
-      attributionControl: false,
+      center: [facingLng, 20] as [number, number], zoom: 1.8, minZoom: 1.5, maxZoom: 18,
+      /* The basemap is CARTO's, drawn from OpenStreetMap, and the places on it
+         are searched and named through OpenStreetMap too. Both have to be
+         credited on the map itself; this was switched off, which is half of
+         what Nominatim's operators asked us to put right (issue #16). It is
+         collapsed by default so it costs a corner icon, not the view. */
+      attributionControl: {
+        compact: true,
+        // The style credits CARTO and OSM for the map; this credits OSM for the
+        // search results, place names and pins that come from Nominatim.
+        customAttribution: 'Geocoding © OpenStreetMap contributors',
+      } as const,
       maxPitch: 85,
       transformRequest: (url: string) => {
         // Route all CARTO CDN requests through the internal Next.js proxy API
@@ -198,27 +388,66 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         }
         return { url };
       },
-    });
+    };
+
+    // MapLibre asks for a high-performance WebGL2 context and throws outright if it
+    // cannot get one. Some machines refuse that exact request while still granting a
+    // plainer one, so walk down to weaker requests before giving up. The WebGL1 rung
+    // this used to have cannot come back: MapLibre 6's ContextType is 'webgl2' alone,
+    // so machines that only ever managed WebGL1 are now out of reach either way.
+    // Dropping antialias is the last rung left for a struggling GPU.
+    const attributeFallbacks: maplibregl.MapOptions['canvasContextAttributes'][] = [
+      { preserveDrawingBuffer: true },
+      { preserveDrawingBuffer: true, powerPreference: 'low-power', failIfMajorPerformanceCaveat: false },
+      { preserveDrawingBuffer: true, powerPreference: 'low-power', failIfMajorPerformanceCaveat: false, antialias: false },
+    ];
+
+    let map: maplibregl.Map | undefined;
+    for (const canvasContextAttributes of attributeFallbacks) {
+      try {
+        map = new maplibregl.Map(
+          canvasContextAttributes ? { ...baseOptions, canvasContextAttributes } : baseOptions
+        );
+        break;
+      } catch (e) {
+        // A failed constructor leaves its canvas behind; the next attempt needs a clean container.
+        container.innerHTML = '';
+        if (canvasContextAttributes === attributeFallbacks[attributeFallbacks.length - 1]) throw e;
+        console.warn('[OSIRIS] WebGL context rejected, retrying with weaker attributes:', e instanceof Error ? e.message : e);
+      }
+    }
+    if (!map) return;
 
     map.on('load', () => {
       mapRef.current = map;
-      
+
+      /* Measure the container once the layout has settled. The constructor
+         may have read it before it had a size, and a map that starts at the
+         400x300 fallback never recovers on its own. */
+      map.resize();
+
       // Theme colors
       const isGhost = theme === 'ghost';
       const phantomPurple = '#B388FF';
       const phantomDark = '#1A0040';
-      const cameraColor = isGhost ? '#B388FF' : '#00E676';
-      const flightCom = isGhost ? phantomPurple : '#00E5FF';
-      const flightPriv = isGhost ? phantomPurple : '#FFD700';
-      const flightGov = isGhost ? phantomPurple : '#FF9500';
-      const flightMil = isGhost ? phantomPurple : '#FF3D3D';
+      /* The first paint reads the same `--map-*` properties the recolour
+         effects below push in later. Deriving them from `theme` here as well
+         is what let the two drift: the effect's ghost palette was four
+         distinct violets, this block's was one, and whichever ran last won. */
+      const bootStyle = getComputedStyle(document.body);
+      const boot = readMapPalette(name => bootStyle.getPropertyValue(name));
+      const cameraColor = boot.cctv;
+      const flightCom = boot.flightCivil;
+      const flightPriv = boot.flightPrivate;
+      const flightGov = boot.flightGov;
+      const flightMil = boot.flightMilitary;
 
       // Create icons — OSIRIS Unified Palette
       createIcon(map, 'plane-cyan', flightCom, 24);   
       createIcon(map, 'plane-green', flightPriv, 24);   
       createIcon(map, 'plane-pink', flightGov, 24);    
       createIcon(map, 'plane-red', flightMil, 24);     
-      createIcon(map, 'plane-grey', isGhost ? phantomPurple : '#546E7A', 24);    
+      createIcon(map, 'plane-grey', boot.flightUnknown, 24);
       createDot(map, 'dot-gold', isGhost ? phantomPurple : '#D4AF37', 8);
       createDot(map, 'dot-red', isGhost ? phantomPurple : '#D32F2F', 10);
       createDot(map, 'dot-orange', isGhost ? phantomPurple : '#E65100', 10);
@@ -226,8 +455,10 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       createDot(map, 'dot-fire', isGhost ? phantomPurple : '#E65100', 10);
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'network-mesh'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'ip-sweep-devices', 'ip-sweep-pulse', 'ip-sweep-connections', 'scan-targets', 'sdk-entities', 'sdk-links', 'malware-nodes', 'malware-new', 'network-mesh', 'cyber-heads', 'gdelt-events', 'cf-outages', 'cf-attacks', 'alert-pins'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
+
+      // ── FLIGHT ROUTE VISUALIZATION SOURCES & LAYERS ──
 
       // Warning icon generator (parameterized — eliminates 3x copy-paste)
       const createWarningIcon = (id: string, color: string) => {
@@ -312,11 +543,32 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,6, 5,12, 10,20],
         'circle-color': '#D32F2F', 'circle-opacity': 0.06, 'circle-blur': 0.5,
       }});
+      /* Sized by how many live malicious URLs the host serves. A box running
+         forty payloads and one running a single sample were the same dot
+         before, and they are not the same thing. */
       map.addLayer({ id: 'malware-dots', type: 'circle', source: 'malware-nodes', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 1,2, 5,4, 10,6],
+        /* A zoom expression has to be the top-level input to the interpolate,
+           so the activity scaling lives in the output stops rather than
+           multiplying two curves together. sqrt keeps a host serving 80 URLs
+           from dwarfing the map — it reads about three times the single-URL
+           dot, not eighty. */
+        'circle-radius': ['interpolate',['linear'],['zoom'],
+          1,  ['interpolate',['linear'],['sqrt',['max',['get','url_count'],1]], 1,1.6, 3,2.4, 9,4],
+          5,  ['interpolate',['linear'],['sqrt',['max',['get','url_count'],1]], 1,3.2, 3,4.8, 9,8],
+          10, ['interpolate',['linear'],['sqrt',['max',['get','url_count'],1]], 1,4.8, 3,7.2, 9,12],
+        ],
         'circle-color': '#D32F2F',
         'circle-opacity': 0.9,
         'circle-stroke-width': 1, 'circle-stroke-color': '#000000', 'circle-stroke-opacity': 0.8,
+      }});
+      /* Arrival beacon — expands and fades over the minute after a detection
+         is pushed, then the feature drops out of the source entirely. */
+      map.addLayer({ id: 'malware-new-ring', type: 'circle', source: 'malware-new', paint: {
+        'circle-radius': 8,
+        'circle-color': 'transparent',
+        'circle-stroke-color': '#FF1744',
+        'circle-stroke-width': 2,
+        'circle-stroke-opacity': ['interpolate',['linear'],['get','age'], 0,0.9, 1,0],
       }});
       map.addLayer({ id: 'malware-label', type: 'symbol', source: 'malware-nodes', minzoom: 5, layout: {
         'text-field': ['get','malware'], 'text-size': 8, 'text-font': ['JetBrains Mono Bold', 'Open Sans Bold'],
@@ -342,16 +594,70 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'line-opacity': 0.4,
       }});
 
+      /* ══ BOTNET C2 INFRASTRUCTURE — one dot per listed server ══
+         Feodo Tracker lists where a C2 is hosted and whether it still
+         answers. It records no attacker, no victim and no attack, so there is
+         nothing here to draw an arc between: a dot at the hosting country,
+         coloured by the reported status, is the whole of what is observed. */
+      map.addLayer({ id: 'cyber-heads', type: 'circle', source: 'cyber-heads', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,2.5, 5,4, 10,6],
+        'circle-color': ['case', ['==', ['get','status'], 'online'], '#FF6D00', '#555555'],
+        'circle-opacity': 0.95,
+        'circle-stroke-width': 1.5, 'circle-stroke-color': '#333', 'circle-stroke-opacity': 0.9,
+      }});
+      map.addLayer({ id: 'cyber-labels', type: 'symbol', source: 'cyber-heads', minzoom: 3, layout: {
+        'text-field': ['get','malware'], 'text-size': 9, 'text-font': ['JetBrains Mono Bold', 'Open Sans Bold'],
+        'text-offset': [0, 1.5], 'text-max-width': 10, 'text-allow-overlap': false,
+      }, paint: { 'text-color': '#333333', 'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.85 }});
 
       map.addLayer({ id: 'gdelt-dots', type: 'circle', source: 'gdelt', paint: {
         'circle-radius': 4, 'circle-color': '#D32F2F', 'circle-opacity': 0.5, 'circle-stroke-width': 1, 'circle-stroke-color': '#D32F2F', 'circle-stroke-opacity': 0.25,
       }});
 
-      // GPS Jamming — crimson
-      map.addLayer({ id: 'jam-fill', type: 'circle', source: 'gps-jamming', paint: { 'circle-radius': 30, 'circle-color': '#D32F2F', 'circle-opacity': 0.12, 'circle-blur': 1 }});
-      map.addLayer({ id: 'jam-label', type: 'symbol', source: 'gps-jamming', layout: {
-        'text-field': ['concat','GPS JAM ',['to-string',['get','severity']],'%'], 'text-size': 10, 'text-font': ['Open Sans Bold'], 'text-allow-overlap': true,
-      }, paint: { 'text-color': '#D32F2F', 'text-halo-color': '#000', 'text-halo-width': 1 }});
+      /* ── GDELT 2.0 Events — coloured by CAMEO QuadClass so cooperation and
+         conflict are separable at a glance, sized by article volume. ── */
+      map.addLayer({ id: 'gdelt-events-dots', type: 'circle', source: 'gdelt-events', paint: {
+        'circle-radius': ['interpolate',['linear'],['get','articles'], 1,3, 10,5, 50,8, 200,12],
+        'circle-color': ['match',['get','quad'],
+          1,'#00E676',   // verbal cooperation
+          2,'#00E5FF',   // material cooperation
+          3,'#FF9500',   // verbal conflict
+          4,'#FF3D3D',   // material conflict
+          '#9B978E'],
+        'circle-opacity': 0.75,
+        'circle-stroke-width': 1,
+        'circle-stroke-color': '#000000',
+        'circle-stroke-opacity': 0.6,
+      }});
+
+      /* ── Cloudflare Radar — internet outages (country-scoped) ── */
+      map.addLayer({ id: 'cf-outage-halo', type: 'circle', source: 'cf-outages', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,14, 5,26, 10,40],
+        'circle-color': '#FFB300', 'circle-opacity': 0.12, 'circle-blur': 0.9,
+      }});
+      map.addLayer({ id: 'cf-outage-dots', type: 'circle', source: 'cf-outages', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,4, 5,6, 10,9],
+        // Resolved outages read cooler than ongoing ones.
+        'circle-color': ['case',['get','ongoing'],'#FFB300','#8B7325'],
+        'circle-opacity': 0.9,
+        'circle-stroke-width': 1.5, 'circle-stroke-color': '#000000', 'circle-stroke-opacity': 0.7,
+      }});
+      map.addLayer({ id: 'cf-outage-label', type: 'symbol', source: 'cf-outages', minzoom: 3, layout: {
+        'text-field': ['get','country_name'], 'text-size': 9, 'text-font': ['JetBrains Mono Bold', 'Open Sans Bold'],
+        'text-offset': [0, 1.4], 'text-max-width': 12, 'text-allow-overlap': false,
+      }, paint: { 'text-color': '#FFB300', 'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.85 }});
+
+      /* ── Cloudflare Radar — layer-3 attack origin share ── */
+      map.addLayer({ id: 'cf-attack-dots', type: 'circle', source: 'cf-attacks', paint: {
+        'circle-radius': ['interpolate',['linear'],['get','share'], 0,4, 5,9, 20,16, 50,24],
+        'circle-color': '#FF3D3D', 'circle-opacity': 0.35, 'circle-blur': 0.3,
+        'circle-stroke-width': 1, 'circle-stroke-color': '#FF3D3D', 'circle-stroke-opacity': 0.7,
+      }});
+      map.addLayer({ id: 'cf-attack-label', type: 'symbol', source: 'cf-attacks', minzoom: 2, layout: {
+        'text-field': ['concat',['get','country'],' ',['to-string',['get','share']],'%'],
+        'text-size': 9, 'text-font': ['JetBrains Mono Bold', 'Open Sans Bold'],
+        'text-offset': [0, 1.6], 'text-allow-overlap': false,
+      }, paint: { 'text-color': '#FF6B6B', 'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.9 }});
 
       // Weather Events (NASA EONET) — deep violet
       map.addLayer({ id: 'weather-glow', type: 'circle', source: 'weather', paint: {
@@ -380,7 +686,8 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'circle-color': ['case', 
           ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100',
           ['==', ['get','status'], 'Active Conflict Zone'], '#D32F2F', 
-          ['==', ['get','status'], 'Destroyed / Decommissioning'], '#546E7A', 
+          ['in', 'Decommission', ['get', 'status']], '#546E7A', 
+          ['==', ['get','status'], 'Under Construction'], '#FFA726', 
           '#26A69A'
         ],
         'circle-opacity': 0.75,
@@ -391,13 +698,25 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': ['case', ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100', '#26A69A'], 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.7 }});
 
-      // Satellites
-      map.addLayer({ id: 'sat-glow', type: 'circle', source: 'satellites', paint: {
+      // Satellites.
+      // Every satellite is drawn once, by the custom 3D layer below, at its
+      // altitude. These two circle layers are kept defined — the source feeds
+      // the 3D layer and other code refers to them — but hidden: drawing the
+      // same satellite both flat on the ground and again up at altitude is
+      // what made the map read as half 2D and half 3D.
+      // Hit-testing is handled by the 3D layer's own GPU pick pass, since
+      // queryRenderedFeatures cannot see into a custom WebGL layer.
+      map.addLayer({ id: 'sat-glow', type: 'circle', source: 'satellites', layout: { visibility: 'none' }, paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,3, 5,6], 'circle-color': ['get','color'], 'circle-opacity': 0.3, 'circle-blur': 1,
       }});
-      map.addLayer({ id: 'sat-dots', type: 'circle', source: 'satellites', paint: {
+      map.addLayer({ id: 'sat-dots', type: 'circle', source: 'satellites', layout: { visibility: 'none' }, paint: {
         'circle-radius': ['interpolate',['linear'],['zoom'], 1,1.5, 5,3], 'circle-color': ['get','color'], 'circle-opacity': 1.0,
       }});
+      // The spacecraft themselves, lifted to their orbit.
+      if (!map.getLayer('sat-3d')) {
+        satLayerRef.current = createSatelliteLayer('sat-3d');
+        map.addLayer(satLayerRef.current as any);
+      }
 
       // Maritime — ports & naval bases — ocean teal
       map.addLayer({ id: 'maritime-glow', type: 'circle', source: 'maritime', paint: {
@@ -447,20 +766,37 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.8], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#EC407A', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.8 }});
 
-      // SIGINT RSS news - gold markers
-      map.addLayer({ id: 'sigint-news-glow', type: 'circle', source: 'sigint-news', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 1,6, 5,10, 10,18],
-        'circle-color': '#D4AF37', 'circle-opacity': 0.12, 'circle-blur': 1,
+      // Live Alert pins — a report at the place it names, coloured by what it describes
+      const alertColor: LayerColor = ['match', ['get','kind'], 'rocket', ALERT_KINDS.rocket.color, 'event', ALERT_KINDS.event.color, ALERT_KINDS.news.color];
+      map.addLayer({ id: 'alert-pin-glow', type: 'circle', source: 'alert-pins', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,7, 6,14, 10,22],
+        'circle-color': alertColor, 'circle-opacity': 0.16, 'circle-blur': 0.8,
       }});
-      map.addLayer({ id: 'sigint-news-dots', type: 'circle', source: 'sigint-news', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 1,3, 5,5, 10,8],
-        'circle-color': '#D4AF37', 'circle-opacity': 0.9,
-        'circle-stroke-width': 1.5, 'circle-stroke-color': '#FFF8DC', 'circle-stroke-opacity': 0.6,
+      map.addLayer({ id: 'alert-pin-dots', type: 'circle', source: 'alert-pins', paint: {
+        'circle-radius': ['interpolate',['linear'],['zoom'], 1,3.5, 6,6, 10,8],
+        'circle-color': alertColor,
+        // A region is placed less exactly than a town, so it is drawn as a ring.
+        'circle-opacity': ['case', ['==', ['get','precision'], 'region'], 0.15, 0.95],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': ['match', ['get','precision'], 'region', alertColor, '#0A0A0A'] as LayerColor,
       }});
-      map.addLayer({ id: 'sigint-news-label', type: 'symbol', source: 'sigint-news', minzoom: 5, layout: {
-        'text-field': ['get','source'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
-        'text-offset': [0, 1.6], 'text-max-width': 10, 'text-allow-overlap': false,
-      }, paint: { 'text-color': '#D4AF37', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.85 }});
+      // A report just in, and the pin a popup is open on, each get a ring.
+      map.addLayer({ id: 'alert-pin-pulse', type: 'circle', source: 'alert-pins', filter: ['==', ['get','fresh'], true], paint: {
+        'circle-radius': 9, 'circle-color': 'transparent',
+        'circle-stroke-color': alertColor as never, 'circle-stroke-width': 1.5, 'circle-stroke-opacity': 0.7,
+      }});
+      map.addLayer({ id: 'alert-pin-selected', type: 'circle', source: 'alert-pins', filter: ['==', ['get','id'], ''], paint: {
+        'circle-radius': 13, 'circle-color': 'transparent',
+        'circle-stroke-color': '#FFFFFF', 'circle-stroke-width': 1.5, 'circle-stroke-opacity': 0.85,
+      }});
+      map.addLayer({ id: 'alert-pin-label', type: 'symbol', source: 'alert-pins', minzoom: 5, layout: {
+        // "Riyadh ·3" when three reports name the same town.
+        'text-field': ['case', ['>', ['get','stack'], 1],
+          ['concat', ['get','place_name'], ' ·', ['to-string', ['get','stack']]],
+          ['get','place_name']],
+        'text-size': 10, 'text-font': ['Open Sans Bold'],
+        'text-offset': [0, 1.2], 'text-anchor': 'top', 'text-max-width': 12, 'text-allow-overlap': false,
+      }, paint: { 'text-color': alertColor, 'text-halo-color': '#000', 'text-halo-width': 1.2, 'text-opacity': 0.9 }});
 
       // ══ IP SWEEP — Neighborhood device visualization ══
       map.addLayer({ id: 'sweep-connections', type: 'line', source: 'ip-sweep-connections', paint: {
@@ -516,6 +852,8 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
           'icon-rotate': ['get','heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
         }, paint: { 'icon-opacity': 0.85 }});
       });
+
+      // Route layers are added later (after setMapReady) so they render on top of everything.
 
       // Balloons (moving entities)
       map.addLayer({ id: 'balloon-dots', type: 'circle', source: 'balloons', paint: {
@@ -606,7 +944,14 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         'text-offset': [0, 1.2], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','type'], 'military','#D32F2F', 'tanker','#E65100', 'cargo','#26C6DA', '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
+
       setMapReady(true);
+      // 'load' means the style parsed; 'idle' means the tiles are drawn.
+      // The splash waits for the second, so it lifts onto a finished globe.
+      map.once('idle', () => onReadyRef.current?.());
+      // Dev-only handle. The map is otherwise unreachable from the console,
+      // which makes interaction bugs guesswork rather than diagnosis.
+      (window as any).__osirisMap = map;
     });
 
     // Events
@@ -618,8 +963,42 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         onMouseCoords?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
       }
     });
-    map.on('contextmenu', e => { e.preventDefault(); onRightClick?.({ lat: e.lngLat.lat, lng: e.lngLat.lng }); });
-    map.on('moveend', () => { const c = map.getCenter(); onViewStateChange?.({ zoom: map.getZoom(), latitude: c.lat }); });
+    /* The region dossier opens on a double right-click: two within
+       DOUBLE_RIGHT_MS and a few pixels of each other. A single right-click
+       was too easy to make by accident — it opened a panel and set off a
+       place lookup and a country's worth of Wikidata requests. A touch
+       long-press is already deliberate, so on a phone one still opens it;
+       asking for two there would make it all but unreachable. */
+    let lastRightClick: { at: number; x: number; y: number } | null = null;
+    map.on('contextmenu', e => {
+      e.preventDefault();
+      const open = () => onRightClick?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+      if ((e.originalEvent as PointerEvent).pointerType === 'touch') { open(); return; }
+
+      const now = performance.now();
+      const { x, y } = e.point;
+      const isSecond = lastRightClick !== null
+        && now - lastRightClick.at < DOUBLE_RIGHT_MS
+        && Math.hypot(x - lastRightClick.x, y - lastRightClick.y) < DOUBLE_RIGHT_SLOP_PX;
+      if (isSecond) {
+        lastRightClick = null;
+        open();
+      } else {
+        lastRightClick = { at: now, x, y };
+      }
+    });
+    const reportViewState = () => { const c = map.getCenter(); onViewStateChange?.({ zoom: map.getZoom(), latitude: c.lat }); };
+    map.on('load', reportViewState);
+    map.on('moveend', reportViewState);
+    // Lightweight settled-view diagnostics for camera/terrain regressions.
+    const reportCamera = () => {
+      const center = map.getCenter();
+      container.dataset.mapCamera = JSON.stringify({ zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing(), lat: center.lat, lng: center.lng });
+    };
+    map.on('load', reportCamera);
+    map.on('moveend', reportCamera);
+    map.on('idle', reportCamera);
+    reportCamera();
 
     // ── POPUP HELPER ──
     const popup = (coords: any, html: string) => {
@@ -632,36 +1011,117 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     // ── XSS PROTECTION HELPERS ──
     const htmlEsc = (s: any): string => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const idSafe = (s: any): string => String(s ?? '').replace(/[^a-zA-Z0-9_\.\-]/g, '');
-    const urlSafe = (s: any): string => { const u = String(s ?? ''); return /^https?:\/\//i.test(u) ? u : '#'; };
-    const colorSafe = (s: any): string => /^#[0-9a-fA-F]{3,8}$/.test(String(s ?? '')) ? String(s) : '#aaa';
+    // An http(s) link, escaped and ready for an href or src attribute: a quote
+    // in a feed's URL would otherwise close the attribute and open a handler.
+    const urlSafe = (s: any): string => { const u = String(s ?? ''); return /^https?:\/\//i.test(u) ? htmlEsc(u) : '#'; };
 
-    // ── Flights (with FlightAware + ADS-B Exchange links) ──
+    const formatTime = (iso: string | null) => {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short' });
+      } catch { return '—'; }
+    };
+
+    // ── Flights (with FlightAware + ADS-B Exchange links + ROUTE VISUALIZATION) ──
     ['fl-commercial','fl-private','fl-jets','fl-military'].forEach(layer => {
       map.on('click', layer, e => {
         if (!e.features?.length) return;
         const p = e.features[0].properties as any;
         const coords = (e.features[0].geometry as any).coordinates;
         const cs = (p.callsign||'').trim();
-        popup(coords, `<div style="${pStyle}border:1px solid rgba(212,175,55,0.3);">
+
+        // Show initial popup immediately (without route data)
+        const routeLoadingId = `route-info-${Date.now()}`;
+        popup(coords, `<div style="${pStyle}border:1px solid rgba(255,255,255,0.08);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <span style="color:#D4AF37;font-size:16px;font-weight:700;letter-spacing:0.1em;">${htmlEsc(cs)}</span>
+            <span style="color:#E8E6E0;font-size:15px;font-weight:700;letter-spacing:0.08em;">${htmlEsc(cs)}</span>
             <span style="color:#5C5A54;font-size:10px;">${htmlEsc(p.icao24||'')}</span>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;">
-            <div><span style="color:#5C5A54;font-size:9px;">MODEL</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.model||'—')}</span></div>
-            <div><span style="color:#5C5A54;font-size:9px;">ALT</span><br/><span style="color:#00E5FF;">${p.alt?Math.round(p.alt)+'m':'—'}</span></div>
-            <div><span style="color:#5C5A54;font-size:9px;">SPEED</span><br/><span style="color:#E8E6E0;">${p.speed_knots||'—'}kt</span></div>
-            <div><span style="color:#5C5A54;font-size:9px;">HDG</span><br/><span style="color:#E8E6E0;">${Math.round(p.heading||0)}°</span></div>
-            <div><span style="color:#5C5A54;font-size:9px;">REG</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.registration||'—')}</span></div>
-            <div><span style="color:#5C5A54;font-size:9px;">POS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(2)},${coords[0].toFixed(2)}</span></div>
+            <div><span style="color:#5C5A54;font-size:9px;">MODEL</span><br/><span style="color:#B0BEC5;">${htmlEsc(p.model||'—')}</span></div>
+            <div><span style="color:#5C5A54;font-size:9px;">ALT</span><br/><span style="color:#B0BEC5;">${p.alt?Math.round(p.alt)+'m':'—'}</span></div>
+            <div><span style="color:#5C5A54;font-size:9px;">SPEED</span><br/><span style="color:#B0BEC5;">${p.speed_knots||'—'}kt</span></div>
+            <div><span style="color:#5C5A54;font-size:9px;">HDG</span><br/><span style="color:#B0BEC5;">${Math.round(p.heading||0)}°</span></div>
+            <div><span style="color:#5C5A54;font-size:9px;">REG</span><br/><span style="color:#B0BEC5;">${htmlEsc(p.registration||'—')}</span></div>
+            <div><span style="color:#5C5A54;font-size:9px;">POS</span><br/><span style="color:#B0BEC5;">${coords[1].toFixed(2)},${coords[0].toFixed(2)}</span></div>
           </div>
-          <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
-            <a href="https://www.flightaware.com/live/flight/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#D4AF37;border:1px solid rgba(212,175,55,0.4);background:rgba(212,175,55,0.1);">⚡ FLIGHTAWARE</a>
-            <a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(p.icao24||'')}" target="_blank" style="${linkStyle}color:#00E5FF;border:1px solid rgba(0,229,255,0.4);background:rgba(0,229,255,0.1);">📡 ADS-B</a>
-            <a href="https://www.radarbox.com/data/flights/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#FF69B4;border:1px solid rgba(255,105,180,0.4);background:rgba(255,105,180,0.1);">📍 RADARBOX</a>
+          <div id="ac-${idSafe(p.icao24||'')}" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">
+            <span style="color:#5C5A54;font-size:9px;letter-spacing:0.1em;">IDENTIFYING AIRFRAME…</span>
           </div>
-          <button onclick="window.openOsirisIntel({ callsign: '${idSafe(cs)}', icao24: '${idSafe(p.icao24||'')}', model: '${idSafe(p.model||'')}', registration: '${idSafe(p.registration||'')}' })" style="width:100%;margin-top:8px;padding:6px 12px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.5);color:#D4AF37;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ DEEP DIVE INTEL ]</button>
+          <button onclick="window.osirisWatchFlight && window.osirisWatchFlight({ icao24: '${idSafe(p.icao24||'')}', callsign: '${idSafe(cs)}' })" style="width:100%;margin-top:8px;padding:6px 12px;background:rgba(0,229,255,0.10);border:1px solid rgba(0,229,255,0.35);color:#7FE9FF;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">+ WATCH THIS AIRCRAFT</button>
+          <div id="${routeLoadingId}" style="margin-top:8px;padding:6px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+            <span style="color:#5C5A54;font-size:9px;letter-spacing:0.1em;">RESOLVING ROUTE…</span>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">
+            <a href="https://www.flightaware.com/live/flight/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#78909C;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);">FLIGHTAWARE</a>
+            <a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(p.icao24||'')}" target="_blank" style="${linkStyle}color:#78909C;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);">ADS-B</a>
+            <a href="https://www.radarbox.com/data/flights/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#78909C;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);">RADARBOX</a>
+          </div>
         </div>`);
+
+        // The transponder only reports a type code (often nothing at all), so
+        // resolve the real manufacturer/model and registration out of band.
+        if (p.icao24) {
+          fetch(`/api/aircraft?icao24=${encodeURIComponent(p.icao24)}`)
+            .then(r => (r.ok ? r.json() : null))
+            .then((d) => {
+              const el = document.getElementById(`ac-${p.icao24}`);
+              if (!el || !d || d.error) {
+                if (el) el.innerHTML = '<span style="color:#5C5A54;font-size:9px;">AIRFRAME NOT IN REGISTRY</span>';
+                return;
+              }
+              const bits = [d.registration, d.typeCode, d.operator].filter(Boolean)
+                .map((x: string) => htmlEsc(String(x))).join(' · ');
+              el.innerHTML =
+                `<div style="color:#E8E6E0;font-size:11px;line-height:1.35;">${htmlEsc(d.model || 'Unidentified type')}</div>` +
+                (bits ? `<div style="color:#78909C;font-size:9px;margin-top:2px;">${bits}</div>` : '');
+            })
+            .catch(() => {});
+        }
+
+        // Resolve origin/destination for the readout only. The line this used
+        // to draw was a straight hop between two airports, which is not the
+        // path flown — watched aircraft draw their real reported track instead.
+        const cleanCallsign = cs.replace(/\s+/g, '');
+        const routeParams = new URLSearchParams({
+          callsign: cleanCallsign,
+          icao24: p.icao24 || '',
+          lat: String(coords[1]),
+          lng: String(coords[0]),
+          speed: String(p.speed_knots || 0),
+        });
+        fetch(`/api/flight-route?${routeParams}`)
+          .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+          .then(routeData => {
+            const el = document.getElementById(routeLoadingId);
+            if (!el) return;
+            if (routeData.found && routeData.origin && routeData.destination) {
+              const depTime = formatTime(routeData.departureTime);
+              const arrTime = formatTime(routeData.arrivalTime);
+              const pct = Math.round((routeData.progress || 0) * 100);
+              const distKm = routeData.totalDistanceKm || 0;
+              el.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <div><span style="color:#5C5A54;font-size:8px;">FROM</span><br/><span style="color:#E8E6E0;font-size:13px;font-weight:700;">${htmlEsc(routeData.origin.iata || routeData.origin.icao)}</span> <span style="color:#5C5A54;font-size:9px;">${htmlEsc(routeData.origin.city)}</span></div>
+                  <span style="color:#5C5A54;font-size:11px;">&rarr;</span>
+                  <div style="text-align:right;"><span style="color:#5C5A54;font-size:8px;">TO</span><br/><span style="color:#E8E6E0;font-size:13px;font-weight:700;">${htmlEsc(routeData.destination.iata || routeData.destination.icao)}</span> <span style="color:#5C5A54;font-size:9px;">${htmlEsc(routeData.destination.city)}</span></div>
+                </div>
+                <div style="height:2px;background:rgba(255,255,255,0.06);border-radius:1px;margin:6px 0;"><div style="width:${pct}%;height:100%;background:rgba(255,255,255,0.35);border-radius:1px;"></div></div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:#78909C;">
+                  <span>DEP ${depTime}</span>
+                  <span>${pct}% &middot; ${distKm.toLocaleString()}km</span>
+                  <span>ARR ${arrTime}</span>
+                </div>
+              `;
+            } else {
+              el.innerHTML = `<span style="color:#5C5A54;font-size:9px;">NO SCHEDULED ROUTE</span>`;
+            }
+          })
+          .catch(() => {
+            const el = document.getElementById(routeLoadingId);
+            if (el) el.innerHTML = `<span style="color:#5C5A54;font-size:9px;">ROUTE UNAVAILABLE</span>`;
+          });
       });
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
@@ -708,19 +1168,89 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     });
 
     // ── Satellites (SatNOGS powered) ──
-    map.on('click', 'sat-dots', e => {
-      if (!e.features?.length) return;
-      const p = e.features[0].properties as any;
-      const coords = (e.features[0].geometry as any).coordinates;
-      popup(coords, `<div style="${pStyle}border:1px solid rgba(212,175,55,0.3);">
-        <div style="color:#D4AF37;font-size:12px;font-weight:700;letter-spacing:0.1em;margin-bottom:4px;">🛰️ ${htmlEsc(p.name)}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:9px;margin-bottom:8px;">
-          <div><span style="color:#5C5A54;">MISSION</span><br/><span style="color:${colorSafe(p.color)};">${htmlEsc(p.mission||'Unknown')}</span></div>
-          <div><span style="color:#5C5A54;">ALT</span><br/><span style="color:#00E5FF;">${p.alt ? p.alt+' km' : '—'}</span></div>
-          <div><span style="color:#5C5A54;">POS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(2)}°, ${coords[0].toFixed(2)}°</span></div>
-        </div>
-        ${p.noradId ? `<a href="https://www.n2yo.com/satellite/?s=${p.noradId}" target="_blank" style="display:block;text-align:center;padding:4px;margin-top:6px;font-size:8px;font-family:monospace;letter-spacing:0.1em;text-decoration:none;color:#00E5FF;border:1px solid rgba(0,229,255,0.4);background:rgba(0,229,255,0.1);border-radius:2px;cursor:pointer;">📡 TRACK ON N2YO</a>` : ''}
-      </div>`);
+
+    // Satellites are picked on the GPU: the pick pass runs the same vertex
+    // shader as the visible one, so the target is always exactly where the
+    // marker was drawn — including its altitude. A ground-projected hit test
+    // would put the target under the satellite instead of on it.
+    map.on('click', e => {
+      const layer = satLayerRef.current;
+      if (!layer) return;
+      // Defer to any layer that has its own click handler, so a camera or an
+      // aircraft under the cursor is not stolen by a satellite behind it.
+      // Only those layers count: querying every feature matches the basemap
+      // land and water fills at essentially any point on the globe, which
+      // made this bail out every single time.
+      const hits = map.queryRenderedFeatures(e.point);
+      if (hits.some(f => f.layer?.id && CLICKABLE_LAYERS.has(f.layer.id))) return;
+      // An OI arc or point is picked on the GPU too, and it is in front: the click is OI's.
+      if (oiGlobeRef.current?.hit(e.point)) return;
+      const idx = layer.pick(e.point.x, e.point.y);
+      const p = idx == null ? null : satRowsRef.current[idx];
+      // Clicking past every satellite is how a selection is dismissed, so an
+      // empty click has to clear the ring and the track rather than leave them
+      // lit over nothing.
+      if (idx == null || !p) { clearSat(); return; }
+
+      // The readout is a panel, not a MapLibre popup: a popup can only anchor
+      // to a ground coordinate, and these markers are drawn at altitude. Any
+      // other layer's popup is still welcome to the screen, but not on top of
+      // this selection.
+      popupRef.current?.remove();
+      layer.setOrbit(null);
+      satPickedRef.current = idx;
+      satSelectedIdRef.current = p.noradId ?? null;
+      layer.setSelected(idx);
+      setSelectedSat({ ...p, periodMinutes: null, track: p.noradId ? 'loading' : 'unavailable' });
+
+      // Draw the selected satellite's orbit. Fetched per click rather than
+      // bundled with the catalogue: that payload is already megabytes, and an
+      // operator looks at one orbit at a time.
+      if (p.noradId) {
+        const wanted = p.noradId;
+        // A slower reply for a satellite the operator has already moved on
+        // from must not draw over the one they are looking at now.
+        const stale = () => satSelectedIdRef.current !== wanted;
+        const mark = (track: SatelliteDetail['track'], periodMinutes: number | null = null) =>
+          setSelectedSat(prev => (prev && prev.noradId === wanted ? { ...prev, track, periodMinutes } : prev));
+        const at = satEpochRef.current;
+        fetch(`/api/satellites/orbit?id=${encodeURIComponent(wanted)}${at ? `&t=${at}` : ''}`)
+          .then(r => (r.ok ? r.json() : null))
+          .then(d => {
+            if (stale()) return;
+            if (!d?.segments?.length) { mark('unavailable'); return; }
+            layer.setOrbit(
+              d.segments.map((seg: number[][]) => seg.map(([lng, lat, altKm]) => ({ lng, lat, altKm }))),
+              parseColor(satColorFor(p.category, p.color, paletteRef.current)),
+            );
+            mark('ready', typeof d.periodMinutes === 'number' ? d.periodMinutes : null);
+          })
+          // No track is fine; the satellite still shows — but the readout says so
+          // rather than sitting on 'plotting' forever.
+          .catch(() => { if (!stale()) mark('unavailable'); });
+      }
+    });
+
+    // The cursor should say a satellite is clickable, like every other layer.
+    // Picking re-renders the entire catalogue and reads back from the GPU.
+    // Keep that work out of camera gestures and limit hover checks to 10/sec.
+    // Click selection above remains immediate and full precision.
+    let hoverFrame = 0;
+    let lastHoverPick = -Infinity;
+    map.on('mousemove', e => {
+      const layer = satLayerRef.current;
+      if (!layer || hoverFrame || map.isMoving() || performance.now() - lastHoverPick < 100) return;
+      hoverFrame = requestAnimationFrame(() => {
+        hoverFrame = 0;
+        if (map.isMoving()) return;
+        const canvas = map.getCanvas();
+        // Never fight another layer that has already claimed the cursor.
+        if (canvas.style.cursor && canvas.style.cursor !== 'pointer') return;
+        lastHoverPick = performance.now();
+        const over = layer.pick(e.point.x, e.point.y) != null;
+        if (over) canvas.style.cursor = 'pointer';
+        else if (canvas.style.cursor === 'pointer') canvas.style.cursor = '';
+      });
     });
 
     // ── Fires (with NASA FIRMS link) ──
@@ -743,26 +1273,114 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       if (!e.features?.length) return;
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
-      const tType = (p.threat_type || 'MALWARE').toUpperCase();
+      const tType = (p.threat_type || 'malware').replace(/_/g, ' ').toUpperCase();
       const statusColor = p.status === 'online' ? '#39FF14' : '#FF1744';
-      
-      popup(coords, `<div style="${pStyle}border:1px solid rgba(255,23,68,0.4);box-shadow:inset 0 0 12px rgba(255,23,68,0.1);">
+      const place = [p.city, p.country].filter(Boolean).join(', ') || 'UNKNOWN';
+      const host = p.as_name ? `AS${p.asn} ${p.as_name}` : '';
+      const urls = Number(p.url_count) || 1;
+      // Every field below is observed. Where the old popup linked to a generic
+      // browse page, this links to the specific URLhaus report behind the node.
+      const ref = urlSafe(p.reference);
+
+      popup(coords, `<div style="${pStyle}border:1px solid rgba(255,23,68,0.4);box-shadow:inset 0 0 12px rgba(255,23,68,0.1);min-width:250px;">
         <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,23,68,0.3);padding-bottom:6px;margin-bottom:8px;">
           <div style="color:#FF1744;font-size:12px;font-weight:700;letter-spacing:0.1em;text-shadow:0 0 4px rgba(255,23,68,0.5);">[ ${htmlEsc(tType)} ]</div>
-          <div style="color:#5C5A54;font-size:9px;">${htmlEsc(p.country || 'UNKNOWN')}</div>
+          <div style="color:#5C5A54;font-size:9px;">${htmlEsc(place)}</div>
         </div>
-        <div style="color:#E8E6E0;font-size:11px;font-weight:bold;margin-bottom:10px;">${htmlEsc(p.malware || 'Unidentified Threat Payload')}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:12px;background:rgba(0,0,0,0.3);padding:6px;border-radius:4px;">
-          <div><span style="color:#5C5A54;">TARGET IP</span><br/><span style="color:#00E5FF;font-family:monospace;">${htmlEsc(p.ip)}</span></div>
-          <div><span style="color:#5C5A54;">STATUS</span><br/><span style="color:${statusColor};">${(p.status||'UNKNOWN').toUpperCase()}</span></div>
+        <div style="color:#E8E6E0;font-size:11px;font-weight:bold;margin-bottom:2px;">${htmlEsc(p.malware || 'Unclassified payload')}</div>
+        ${host ? `<div style="color:#5C5A54;font-size:9px;margin-bottom:10px;">${htmlEsc(host)}</div>` : '<div style="margin-bottom:10px;"></div>'}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;background:rgba(0,0,0,0.3);padding:6px;border-radius:4px;">
+          <div><span style="color:#5C5A54;">HOST</span><br/><span style="color:#00E5FF;font-family:monospace;">${htmlEsc(p.ip)}:${htmlEsc(String(p.port ?? 0))}</span></div>
+          <div><span style="color:#5C5A54;">STATUS</span><br/><span style="color:${statusColor};">${htmlEsc((p.status||'unknown').toUpperCase())}</span></div>
+          <div><span style="color:#5C5A54;">LIVE URLS</span><br/><span style="color:#E8E6E0;">${urls}</span></div>
+          <div><span style="color:#5C5A54;">LAST REPORT</span><br/><span style="color:#E8E6E0;">${htmlEsc((p.last_seen || '').split(' ')[0] || '—')}</span></div>
         </div>
+        <div style="color:#5C5A54;font-size:9px;margin-bottom:10px;">First seen ${htmlEsc((p.first_seen || '').split(' ')[0] || '—')}${p.reporter ? ` · reported by ${htmlEsc(p.reporter)}` : ''}</div>
         <div style="display:flex;gap:6px;">
-          <a href="https://feodotracker.abuse.ch/browse/" target="_blank" style="${linkStyle}flex:1;text-align:center;color:#E8E6E0;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);">THREAT INTEL ↗</a>
+          ${ref ? `<a href="${ref}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:#E8E6E0;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);">URLHAUS REPORT ↗</a>` : ''}
         </div>
-        <button onclick="window.openOsirisIntel({ type: 'ip', ip: '${idSafe(p.ip)}', threat_type: '${idSafe(p.malware || p.threat_type || '')}', status: '${idSafe(p.status || '')}' })" style="width:100%;margin-top:8px;padding:8px 12px;background:linear-gradient(90deg, rgba(255,23,68,0.1) 0%, rgba(255,23,68,0.2) 100%);border:1px solid rgba(255,23,68,0.6);color:#FF1744;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.15em;border-radius:4px;cursor:pointer;transition:all 0.2s;">DEEP DIVE ANALYTICS</button>
       </div>`);
     });
 
+
+    // ── GDELT 2.0 Events ──
+    const QUAD_COLOR: Record<string, string> = { '1': '#00E676', '2': '#00E5FF', '3': '#FF9500', '4': '#FF3D3D' };
+    map.on('click', 'gdelt-events-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      const accent = QUAD_COLOR[String(p.quad)] ?? '#9B978E';
+      const src = urlSafe(p.url);
+      const tone = Number(p.tone);
+      popup(coords, `
+      <div style="${pStyle}border:1px solid ${accent}66;min-width:250px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:${accent};box-shadow:0 0 8px ${accent};"></span>
+          <span style="color:${accent};font-size:10px;font-weight:700;letter-spacing:0.15em;">${htmlEsc(p.quad_label)}</span>
+        </div>
+        <div style="color:#E8E6E0;font-size:12px;font-weight:700;margin-bottom:8px;">${htmlEsc(p.name)}</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:10px;color:#9B978E;">
+          <span style="opacity:0.6;">Goldstein</span><span style="color:${Number(p.goldstein) < 0 ? '#FF3D3D' : '#00E676'};">${htmlEsc(p.goldstein)}</span>
+          <span style="opacity:0.6;">Avg tone</span><span style="color:${tone < 0 ? '#FF9500' : '#00E676'};">${htmlEsc(p.tone)}</span>
+          <span style="opacity:0.6;">Articles</span><span style="color:#E8E6E0;">${htmlEsc(p.articles)}</span>
+          <span style="opacity:0.6;">Country</span><span style="color:#E8E6E0;">${htmlEsc(p.country || '—')}</span>
+        </div>
+        <div style="margin-top:8px;font-size:9px;color:#5C5A54;">GDELT 2.0 · ${htmlEsc(String(p.date).slice(0, 16).replace('T', ' '))}Z</div>
+        ${src !== '#' ? `<a href="${src}" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:${accent};border:1px solid ${accent}66;background:${accent}1a;">SOURCE ARTICLE</a>` : ''}
+      </div>`);
+    });
+
+    // ── Cloudflare Radar: internet outage ──
+    map.on('click', 'cf-outage-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      // MapLibre serialises feature properties, so booleans can arrive as strings.
+      const ongoing = p.ongoing === true || p.ongoing === 'true';
+      const accent = ongoing ? '#FFB300' : '#8B7325';
+      const src = urlSafe(p.url);
+      popup(coords, `
+      <div style="${pStyle}border:1px solid ${accent}66;min-width:250px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:${accent};box-shadow:0 0 8px ${accent};"></span>
+          <span style="color:${accent};font-size:10px;font-weight:700;letter-spacing:0.15em;">
+            ${ongoing ? 'ONGOING OUTAGE' : 'RESOLVED OUTAGE'}
+          </span>
+        </div>
+        <div style="color:#E8E6E0;font-size:12px;font-weight:700;margin-bottom:8px;">${htmlEsc(p.country_name)}</div>
+        ${p.description ? `<div style="color:#9B978E;font-size:10px;line-height:1.6;margin-bottom:8px;">${htmlEsc(p.description)}</div>` : ''}
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:10px;color:#9B978E;">
+          <span style="opacity:0.6;">Cause</span><span style="color:#E8E6E0;">${htmlEsc(p.cause || 'Unspecified')}</span>
+          <span style="opacity:0.6;">Scope</span><span style="color:#E8E6E0;">${htmlEsc(p.scope || 'Nationwide')}</span>
+          <span style="opacity:0.6;">Started</span><span style="color:#E8E6E0;">${htmlEsc(String(p.start).slice(0, 16).replace('T', ' '))}</span>
+          ${p.end ? `<span style="opacity:0.6;">Ended</span><span style="color:#E8E6E0;">${htmlEsc(String(p.end).slice(0, 16).replace('T', ' '))}</span>` : ''}
+        </div>
+        <div style="margin-top:8px;font-size:9px;color:#5C5A54;">Cloudflare Radar</div>
+        ${src !== '#' ? `<a href="${src}" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:${accent};border:1px solid ${accent}66;background:${accent}1a;">RADAR DETAIL</a>` : ''}
+      </div>`);
+    });
+
+    // ── Cloudflare Radar: attack origin share ──
+    map.on('click', 'cf-attack-dots', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      popup(coords, `
+      <div style="${pStyle}border:1px solid rgba(255,61,61,0.4);min-width:230px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:#FF3D3D;box-shadow:0 0 8px #FF3D3D;"></span>
+          <span style="color:#FF3D3D;font-size:10px;font-weight:700;letter-spacing:0.15em;">L3 ATTACK ORIGIN</span>
+        </div>
+        <div style="color:#E8E6E0;font-size:12px;font-weight:700;margin-bottom:8px;">${htmlEsc(p.country_name)}</div>
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:10px;color:#9B978E;">
+          <span style="opacity:0.6;">Share</span><span style="color:#FF6B6B;font-weight:700;">${htmlEsc(p.share)}%</span>
+          <span style="opacity:0.6;">Code</span><span style="color:#E8E6E0;">${htmlEsc(p.country)}</span>
+        </div>
+        <div style="margin-top:8px;font-size:9px;color:#5C5A54;line-height:1.5;">
+          Share of observed layer-3 attack traffic by origin · Cloudflare Radar
+        </div>
+      </div>`);
+    });
 
     // ── GDELT Conflicts (with source article) ──
     map.on('click', 'gdelt-dots', e => {
@@ -770,23 +1388,28 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
       
-      // Map coordinates to Liveuamap regions
-      let sourceUrl = p.url || '';
-      if (!sourceUrl || sourceUrl.includes('google.com')) {
-        const [lng, lat] = coords;
-        if (lat > 44 && lat < 53 && lng > 22 && lng < 40) sourceUrl = 'https://liveuamap.com/'; // Ukraine
-        else if (lat > 30 && lat < 33 && lng > 34 && lng < 36) sourceUrl = 'https://israelpalestine.liveuamap.com/'; // Gaza
-        else if (lat > 33 && lat < 34.5 && lng > 35 && lng < 36.5) sourceUrl = 'https://lebanon.liveuamap.com/'; // Lebanon
-        else if (lat > 32 && lat < 37 && lng > 35 && lng < 42) sourceUrl = 'https://syria.liveuamap.com/'; // Syria
-        else if (lat > 10 && lat < 22 && lng > 22 && lng < 38) sourceUrl = 'https://sudan.liveuamap.com/'; // Sudan
-        else if (lat > 12 && lat < 20 && lng > 42 && lng < 55) sourceUrl = 'https://yemen.liveuamap.com/'; // Yemen
-        else sourceUrl = 'https://liveuamap.com/'; // Global fallback
-      }
+      // These are GDACS alerts and each one carries its own report URL. This
+      // used to guess a Liveuamap regional war map from the coordinates
+      // instead, which sent every event outside the six hardcoded boxes — all
+      // of the Americas, Asia and Oceania among them — to the Ukraine map.
+      const src = urlSafe(p.url);
+      // GDACS is a natural-disaster feed. Every event here was headed
+      // "CONFLICT EVENT" — on a live sample that mislabelled 342 of 369
+      // events, nearly all of them wildfires.
+      const KIND: Record<string, [string, string]> = {
+        earthquake: ['🌐 EARTHQUAKE',   '#FF9500'],
+        wildfire:   ['🔥 WILDFIRE',     '#FF6B1A'],
+        flood:      ['🌊 FLOOD',        '#00B0FF'],
+        weather:    ['🌀 TROPICAL CYCLONE', '#00E5FF'],
+        volcano:    ['🌋 VOLCANO',      '#FF3D3D'],
+        drought:    ['☀️ DROUGHT',      '#FFD500'],
+      };
+      const [kindLabel, kindColor] = KIND[String(p.kind)] ?? ['⚠️ GLOBAL INCIDENT', '#FF3D3D'];
 
-      popup(coords, `<div style="${pStyle}border:1px solid rgba(255,61,61,0.3);">
-        <div style="color:#FF3D3D;font-size:12px;font-weight:700;margin-bottom:6px;">⚠️ CONFLICT EVENT</div>
+      popup(coords, `<div style="${pStyle}border:1px solid ${kindColor}4d;">
+        <div style="color:${kindColor};font-size:12px;font-weight:700;margin-bottom:6px;">${kindLabel}</div>
         <div style="font-size:9px;color:#E8E6E0;margin-bottom:8px;line-height:1.4;">${htmlEsc(p.name||'Unclassified incident')}</div>
-        <a href="${urlSafe(sourceUrl)}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:#FF3D3D;border:1px solid rgba(255,61,61,0.4);background:rgba(255,61,61,0.15);display:inline-block;width:100%;box-sizing:border-box;margin-top:4px;">[ OPEN SOURCE ↗ ]</a>
+        ${src !== '#' ? `<a href="${src}" target="_blank" rel="noopener noreferrer" style="${linkStyle}flex:1;text-align:center;color:${kindColor};border:1px solid ${kindColor}66;background:${kindColor}26;display:inline-block;width:100%;box-sizing:border-box;margin-top:4px;">[ OPEN SOURCE ↗ ]</a>` : ''}
       </div>`);
     });
 
@@ -796,14 +1419,20 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
       const color = p.severity === 'war' ? '#FF1744' : p.severity === 'high' ? '#FF9500' : '#FFD500';
+      let headlines: { title?: string; url?: string; source?: string }[] = [];
+      try { headlines = JSON.parse(p.headlines || '[]'); } catch { /* none */ }
+      const count = Number(p.headlineCount) || 0;
+      const headlineList = headlines.map(h => `<a href="${urlSafe(h.url)}" target="_blank" rel="noopener noreferrer" style="display:block;color:#C9C5BC;text-decoration:none;font-size:10px;line-height:1.35;margin-top:5px;">${htmlEsc(h.title)} <span style="color:#5C5A54;">· ${htmlEsc(h.source)}</span></a>`).join('');
       popup(coords, `<div style="${pStyle}border:1px solid ${color}40;">
-        <div style="color:${color};font-size:12px;font-weight:700;margin-bottom:6px;">⚠️ ${htmlEsc(p.label || 'WARNING EVENT')}</div>
-        <div style="font-size:10px;color:#E8E6E0;margin-bottom:8px;line-height:1.4;">${htmlEsc(p.description || 'Global event detected at this location.')}</div>
+        <div style="color:${color};font-size:12px;font-weight:700;margin-bottom:6px;">⚠️ ${htmlEsc(p.label || 'CONFLICT ZONE')}</div>
+        <div style="font-size:10px;color:#E8E6E0;margin-bottom:8px;line-height:1.4;">${htmlEsc(p.description || '')}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;margin-bottom:8px;">
           <div><span style="color:#5C5A54;">SEVERITY</span><br/><span style="color:${color};">${(p.severity||'unknown').toUpperCase()}</span></div>
-          <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
+          <div><span style="color:#5C5A54;">IN THE NEWS</span><br/><span style="color:#E8E6E0;">${count} headline${count === 1 ? '' : 's'}</span></div>
         </div>
-        ${p.sourceUrl ? `<a href="${urlSafe(p.sourceUrl)}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:${color};border:1px solid ${color}40;background:${color}15;display:inline-block;width:100%;box-sizing:border-box;margin-top:4px;">[ OPEN SOURCE ↗ ]</a>` : ''}
+        ${headlineList ? `<div style="padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);margin-bottom:8px;"><div style="font-size:8.5px;letter-spacing:0.14em;color:#5C5A54;">HEADLINES THAT MENTION IT</div>${headlineList}</div>` : ''}
+        <div style="font-size:8.5px;color:#5C5A54;line-height:1.4;margin-bottom:6px;">The zone and its severity come from a list OSIRIS keeps by hand, not from a live measurement.</div>
+        ${p.sourceUrl ? `<a href="${urlSafe(p.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="${linkStyle}flex:1;text-align:center;color:${color};border:1px solid ${color}40;background:${color}15;display:inline-block;width:100%;box-sizing:border-box;margin-top:4px;">[ OPEN SOURCE ↗ ]</a>` : ''}
       </div>`);
     });
 
@@ -822,7 +1451,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         if (!e.features?.length) return;
         const p = e.features[0].properties as any;
         const coords = e.lngLat;
-        const srcUrl = p.url || SDK_SOURCE_URLS[p.source] || 'https://botazez.com';
+        const srcUrl = p.url || SDK_SOURCE_URLS[p.source] || 'https://osirisai.live';
         const domainLabel = p.domain === 'SEA' ? '⚓ MARITIME' : p.domain === 'AIR' ? '✈ AIR CORRIDOR' : '🛡 NAVAL INTEL';
         const domainColor = p.domain === 'SEA' ? '#4FC3F7' : p.domain === 'AIR' ? '#B3E5FC' : '#81D4FA';
         const linkStyle = 'text-decoration:none;padding:3px 8px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:0.05em;';
@@ -835,15 +1464,48 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
             <div><span style="color:#5C5A54;">FROM</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.fromName || 'Origin')}</span></div>
             <div><span style="color:#5C5A54;">TO</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.toName || 'Destination')}</span></div>
             <div><span style="color:#5C5A54;">DOMAIN</span><br/><span style="color:${domainColor};">${p.domain}</span></div>
-            <div><span style="color:#5C5A54;">SOURCE</span><br/><a href="${urlSafe(srcUrl)}" target="_blank" style="color:${domainColor};text-decoration:underline;cursor:pointer;">${htmlEsc(p.source || 'BOTAZEZ')}</a></div>
+            <div><span style="color:#5C5A54;">SOURCE</span><br/><a href="${urlSafe(srcUrl)}" target="_blank" style="color:${domainColor};text-decoration:underline;cursor:pointer;">${htmlEsc(p.source || 'OSIRIS')}</a></div>
           </div>
           <a href="${urlSafe(srcUrl)}" target="_blank" style="${linkStyle}color:${domainColor};border:1px solid ${domainColor}40;background:${domainColor}18;display:inline-block;margin-top:4px;">OPEN SOURCE ↗</a>
         </div>`);
       });
     });
 
+    /* ── Botnet C2 infrastructure (abuse.ch Feodo Tracker) ──
+       Every field below is read off the blocklist row. The popup used to lead
+       with a randomly chosen attack verb and a fabricated attacker origin;
+       what a row actually supports is an address, a family, a hosting
+       country and two observation timestamps. */
+    map.on('click', 'cyber-heads', e => {
+      if (!e.features?.length) return;
+      const p = e.features[0].properties as any;
+      const coords = (e.features[0].geometry as any).coordinates;
+      const online = p.status === 'online';
+      const c = online ? '#FF6D00' : '#8A8880';
+      const row = (label: string, value: string, color = '#E8E6E0', mono = false) =>
+        `<div><span style="color:#5C5A54;font-size:7px;letter-spacing:0.1em;">${label}</span><br/><span style="color:${color};${mono ? 'font-family:monospace;' : ''}">${value}</span></div>`;
+      popup(coords, `<div style="${pStyle}border:1px solid ${c}40;">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid ${c}30;padding-bottom:6px;margin-bottom:8px;">
+          <div style="color:${c};font-size:12px;font-weight:700;letter-spacing:0.12em;">BOTNET C2 SERVER</div>
+          <div style="font-size:8px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:0.1em;background:${c}20;color:${c};border:1px solid ${c}50;">${htmlEsc((p.status || 'unknown').toUpperCase())}</div>
+        </div>
+        <div style="color:#E8E6E0;font-size:11px;font-weight:bold;margin-bottom:10px;">${htmlEsc(p.malware || 'Family not reported')}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;background:rgba(0,0,0,0.35);padding:8px;border-radius:4px;border:1px solid rgba(255,255,255,0.04);">
+          ${row('C2 ADDRESS', htmlEsc(p.ip || '—'), '#00E5FF', true)}
+          ${row('PORT', htmlEsc(String(p.port ?? '—')), '#FFD600', true)}
+          ${row('HOSTED IN', htmlEsc(p.country || 'Not reported'))}
+          ${row('AS', htmlEsc(p.as_number ? `AS${p.as_number}` : '—'), '#E8E6E0', true)}
+          ${row('FIRST SEEN', htmlEsc(p.first_seen || 'Not reported'))}
+          ${row('LAST ONLINE', htmlEsc(p.last_online || 'Not reported'))}
+        </div>
+        ${p.hostname ? `<div style="font-size:9px;color:#8A8880;margin-bottom:8px;font-family:monospace;word-break:break-all;">${htmlEsc(p.hostname)}</div>` : ''}
+        <div style="font-size:8px;color:#5C5A54;line-height:1.5;margin-bottom:8px;">Blocklist entry, not an observed attack. Marker sits at the hosting country's centroid, not the host's location.</div>
+        <div style="font-size:7px;color:#5C5A54;text-align:center;letter-spacing:0.1em;">SOURCE: <a href="${urlSafe(p.source_url || 'https://feodotracker.abuse.ch/browse/')}" target="_blank" style="color:${c};text-decoration:underline;">ABUSE.CH FEODO TRACKER ↗</a></div>
+      </div>`);
+    });
+
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','balloon-dots','rad-dots','ship-dots','sweep-device-dots','scan-targets-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots','cyber-heads','gdelt-events-dots','cf-outage-dots','cf-attack-dots','alert-pin-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -860,7 +1522,6 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
           <div><span style="color:#5C5A54;">TYPE</span><br/><span style="color:#00E5FF;">${(p.type || 'UNKNOWN').toUpperCase()}</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
         </div>
-        <button onclick="window.openOsirisIntel({ type: 'ip', ip: '${idSafe(p.id)}' })" style="width:100%;margin-top:8px;padding:6px 12px;background:rgba(255,109,0,0.15);border:1px solid rgba(255,109,0,0.5);color:#FF6D00;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ IP INTEL DEEP DIVE ]</button>
       </div>`);
     });
 
@@ -908,7 +1569,6 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         </div>
         <div style="font-size:9px;color:#8A8880;margin-bottom:6px;">Open: ${ports.slice(0, 12).join(', ')}${ports.length > 12 ? ' ...' : ''}</div>
         ${vulns.length > 0 ? `<div style="font-size:9px;color:#FF3D3D;margin-bottom:6px;">⚠ CVEs: ${vulns.slice(0, 5).join(', ')}${vulns.length > 5 ? ` +${vulns.length - 5} more` : ''}</div>` : ''}
-        <button onclick="window.openOsirisIntel({ type: 'ip', ip: '${p.ip}' })" style="width:100%;margin-top:6px;padding:6px 12px;background:rgba(255,109,0,0.15);border:1px solid rgba(255,109,0,0.5);color:#FF6D00;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ IP INTEL DEEP DIVE ]</button>
       </div>`);
     });
 
@@ -995,18 +1655,43 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       if (!e.features?.length) return;
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
-      const statusColor = p.status.includes('SEISMIC RISK') ? '#FF9500' : p.status === 'Active Conflict Zone' ? '#FF1744' : p.status === 'Operational' ? '#76FF03' : '#757575';
-      popup(coords, `<div style="${pStyle}border:1px solid rgba(118,255,3,0.3);">
-        <div style="color:#76FF03;font-size:14px;font-weight:700;margin-bottom:4px;">☢️ ${p.name || 'Nuclear Facility'}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
-          <div><span style="color:#5C5A54;">STATUS</span><br/><span style="color:${statusColor};">${p.status || '—'}</span></div>
-          <div><span style="color:#5C5A54;">CITY</span><br/><span style="color:#E8E6E0;">${p.city || '—'}, ${p.country || ''}</span></div>
-          <div><span style="color:#5C5A54;">REACTORS</span><br/><span style="color:#76FF03;">${p.reactors || '—'}</span></div>
-          <div><span style="color:#5C5A54;">CAPACITY</span><br/><span style="color:#E8E6E0;">${p.capacityMW ? p.capacityMW.toLocaleString() + ' MW' : '—'}</span></div>
-          <div><span style="color:#5C5A54;">OWNER</span><br/><span style="color:#E8E6E0;">${p.owner || '—'}</span></div>
-          <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
+      const status = String(p.status ?? '');
+
+      // Same order and colours as the infra-dots paint expression above, so the
+      // popup's accent always matches the dot the user just clicked.
+      const accent =
+        status.includes('SEISMIC RISK') ? '#E65100' :
+        status === 'Active Conflict Zone' ? '#D32F2F' :
+        status.includes('Decommission') ? '#546E7A' :
+        status === 'Under Construction' ? '#FFA726' :
+        '#26A69A';
+
+      // A facility with no reactor (waste storage, enrichment) and a research
+      // reactor rated in thermal MW both carry 0 here — neither is an electrical
+      // figure, so both render as "—" rather than as a real 0 MWe.
+      const row = (label: string, value: string, color = '#E8E6E0') =>
+        `<div><span style="color:#5C5A54;">${label}</span><br/><span style="color:${color};">${value}</span></div>`;
+
+      const ref = p.sourceUrl
+        ? `<a href="${htmlEsc(p.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:${accent};border:1px solid ${accent}66;background:${accent}1A;">REFERENCE</a>`
+        : '';
+
+      popup(coords, `<div style="${pStyle}border:1px solid ${accent}4D;">
+        <div style="color:${accent};font-size:14px;font-weight:700;margin-bottom:2px;">☢️ ${htmlEsc(p.name || 'Nuclear Facility')}</div>
+        <div style="color:#5C5A54;font-size:9px;letter-spacing:0.1em;margin-bottom:10px;">${htmlEsc([p.city, p.country].filter(Boolean).join(', ')) || '—'}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 6px;font-size:9px;">
+          ${row('STATUS', htmlEsc(status) || '—', accent)}
+          ${row('OWNER', htmlEsc(p.owner) || '—')}
+          ${row('REACTORS', p.reactors ? htmlEsc(p.reactors) : '—', accent)}
+          ${row('CAPACITY', p.capacityMW ? `${Number(p.capacityMW).toLocaleString()} MWe` : '—')}
         </div>
-        <a href="https://www.google.com/maps/@${coords[1]},${coords[0]},14z/data=!3m1!1e3" target="_blank" style="${linkStyle}color:#76FF03;border:1px solid rgba(118,255,3,0.4);background:rgba(118,255,3,0.1);">SATELLITE VIEW</a>
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);font-size:9px;color:#5C5A54;">
+          ${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${ref}
+          <a href="https://www.google.com/maps/@${coords[1]},${coords[0]},14z/data=!3m1!1e3" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:#8A8880;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);">SATELLITE</a>
+        </div>
       </div>`);
     });
 
@@ -1047,8 +1732,6 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         <div style="font-size:9px;color:#aaa;">Traffic: <span style="color:#fff;">${p.traffic}</span></div>
         <div style="font-size:9px;color:#aaa;">Risk: <span style="color:${riskCol};font-weight:bold;">${p.risk}</span></div>
       </div>`);
-      // Also offer the live water view for this chokepoint
-      onEntityClick?.({ type: 'maritime_chokepoint', name: p.name, traffic: p.traffic, risk: p.risk, lat: coords[1], lng: coords[0] });
     });
 
     // ── Live News (opens feed viewer) ──
@@ -1066,7 +1749,100 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       });
     });
 
-    return () => { map.remove(); mapRef.current = null; };
+    // ── Live Alert pins: the report, the place it names, and its footage ──
+    const alertPopupHtml = (reports: AlertPinProps[]) => {
+      const [p, ...rest] = reports;
+      const c = (ALERT_KINDS[p.kind as AlertKind] ?? ALERT_KINDS.news).color;
+      const label = (ALERT_KINDS[p.kind as AlertKind] ?? ALERT_KINDS.news).label;
+      const link = urlSafe(p.link);
+      const video = urlSafe(p.video);
+      const thumb = urlSafe(p.thumb);
+      /* Footage plays in place where Telegram serves the file; a video it
+         only shows in the app gets its preview and a way through to it. */
+      const media = video !== '#'
+        ? `<video src="${video}"${thumb !== '#' ? ` poster="${thumb}"` : ''} controls playsinline preload="none" style="display:block;width:100%;max-height:180px;margin-top:10px;border-radius:6px;background:#000;"></video>`
+        : thumb !== '#'
+          ? `<a href="${link}" target="_blank" rel="noopener noreferrer" style="display:block;position:relative;margin-top:10px;">
+              <img src="${thumb}" referrerpolicy="no-referrer" alt="" style="display:block;width:100%;max-height:180px;object-fit:cover;border-radius:6px;">
+              ${p.media_kind === 'video' ? `<span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.75);color:#fff;font-size:9px;letter-spacing:0.1em;padding:4px 10px;border-radius:12px;">▶ WATCH ON TELEGRAM${p.duration ? ` · ${htmlEsc(p.duration)}` : ''}</span>` : ''}
+            </a>`
+          : '';
+      const more = rest.slice(0, 4).map(r => {
+        const rc = (ALERT_KINDS[r.kind as AlertKind] ?? ALERT_KINDS.news).color;
+        return `<a href="${urlSafe(r.link)}" target="_blank" rel="noopener noreferrer" style="display:flex;gap:6px;align-items:baseline;color:#C9C5BC;text-decoration:none;font-size:10px;line-height:1.35;margin-top:5px;">
+          <span style="flex:none;width:6px;height:6px;border-radius:50%;background:${rc};transform:translateY(-1px);"></span>
+          <span>${htmlEsc(r.title)} <span style="color:#5C5A54;">· ${htmlEsc(r.source_name)} · ${htmlEsc(timeAgo(r.published))}</span></span>
+        </a>`;
+      }).join('');
+      return `
+      <div style="${pStyle}border:1px solid ${c}66;width:300px;max-width:100%;padding:14px;max-height:min(44vh,440px);overflow-y:auto;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:9.5px;letter-spacing:0.12em;">
+          <span style="width:7px;height:7px;border-radius:50%;background:${c};box-shadow:0 0 8px ${c};"></span>
+          <span style="color:${c};font-weight:700;">${label}</span>
+          <span style="color:#8A8880;margin-left:auto;">${htmlEsc(timeAgo(p.published))}</span>
+        </div>
+        <div style="color:#F2EFE8;font-family:Inter,system-ui,sans-serif;font-size:12.5px;font-weight:600;line-height:1.35;">${htmlEsc(p.title)}</div>
+        <div style="margin-top:6px;font-size:9.5px;color:#8A8880;">${htmlEsc(p.source_name)}${p.lean ? ` · <span style="color:#9B978E;">${htmlEsc(p.lean)}</span>` : ''}</div>
+        <div style="margin-top:6px;font-size:9.5px;color:${c};" title="The place the post names, resolved against OpenStreetMap. Town-level: a post names a place, not an exact spot.">📍 ${htmlEsc(p.place_label)}<span style="color:#5C5A54;"> · ${p.precision === 'region' ? 'region' : 'place'} named in the post · © OpenStreetMap</span></div>
+        ${media}
+        ${link !== '#' ? `<a href="${link}" target="_blank" rel="noopener noreferrer" style="${linkStyle}color:${c};border:1px solid ${c}66;background:${c}1a;">OPEN POST ↗</a>` : ''}
+        ${more ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);"><div style="font-size:8.5px;letter-spacing:0.14em;color:#5C5A54;">ALSO HERE</div>${more}</div>` : ''}
+      </div>`;
+    };
+
+    /* Several reports can name the same town; they stack, newest first. */
+    const reportsAt = (coords: [number, number], leadId?: string) => {
+      const seen = new Set<string>();
+      return alertPinsRef.current
+        .filter(f => f.geometry.coordinates[0] === coords[0] && f.geometry.coordinates[1] === coords[1])
+        .map(f => f.properties)
+        .filter(p => !seen.has(p.id) && seen.add(p.id))
+        .sort((a, b) => (a.id === leadId ? -1 : b.id === leadId ? 1 : Date.parse(b.published) - Date.parse(a.published)));
+    };
+
+    /** Rings the pin a popup is open on, and clears the ring when it closes. */
+    const markSelected = (id: string) => {
+      try { map.setFilter('alert-pin-selected', ['==', ['get','id'], id]); } catch { /* style not settled */ }
+    };
+    const openAlertPopup = (feature: AlertPinFeature, leadId?: string) => {
+      popup(feature.geometry.coordinates, alertPopupHtml(reportsAt(feature.geometry.coordinates, leadId)));
+      markSelected(feature.properties.id);
+      popupRef.current?.once('close', () => markSelected(''));
+    };
+
+    map.on('click', 'alert-pin-dots', e => {
+      // Matched by id: a rendered feature's geometry is tile-quantised, so it
+      // does not equal the coordinates the pin was placed at.
+      const ids = new Set((e.features ?? []).map(f => f.properties?.id));
+      const lead = alertPinsRef.current.find(f => ids.has(f.properties.id));
+      if (lead) openAlertPopup(lead);
+    });
+
+    openAlertPinRef.current = (id: string) => {
+      const f = alertPinsRef.current.find(x => x.properties.id === id);
+      if (f) openAlertPopup(f, id);
+    };
+
+    /*
+     * Keep the canvas the size of its container.
+     *
+     * MapLibre reads the container once, when it is constructed, and falls
+     * back to 400x300 if the container has no size yet. Its own trackResize
+     * watches the window, which never fires when the container is what
+     * changed — so a map built a frame too early stayed 400x300 inside a full
+     * screen container for the rest of the session, which is what the live
+     * site was serving: a small square of map in the corner of a black page.
+     * A window resize did not recover it; one resize() call did.
+     */
+    const sizeToContainer = new ResizeObserver(() => map.resize());
+    sizeToContainer.observe(container);
+
+    return () => {
+      sizeToContainer.disconnect();
+      cancelAnimationFrame(hoverFrame);
+      map.remove();
+      mapRef.current = null;
+    };
   }, []);
 
   // Day/Night
@@ -1115,20 +1891,34 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setGeo('military', activeLayers.military ? toFeatures(data.military_flights) : []);
   }, [mapReady, data.commercial_flights, data.private_flights, data.private_jets, data.military_flights, activeLayers.flights, activeLayers.private, activeLayers.jets, activeLayers.military]);
 
+  /**
+   * Pull the palette out of the document whenever it can have changed.
+   *
+   * Two triggers, and they need different timing. The Style Studio writes the
+   * properties and then dispatches, so reading straight away is correct. A
+   * theme switch flips a class on <body> from an effect in the page component
+   * — a parent, so it runs *after* this one — and reading now would return the
+   * outgoing theme. The extra frame covers that case.
+   */
+  useEffect(() => {
+    const read = () => {
+      const cs = getComputedStyle(document.body);
+      const next = readMapPalette(name => cs.getPropertyValue(name));
+      setPalette(prev => (MAP_PALETTE_KEYS.every(k => prev[k] === next[k]) ? prev : next));
+    };
+    read();
+    const raf = requestAnimationFrame(read);
+    window.addEventListener(STYLE_EVENT, read);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener(STYLE_EVENT, read);
+    };
+  }, [theme]);
+
     // Update aircraft icon colors dynamically on theme switch
     useEffect(() => {
       if (!mapReady || !mapRef.current) return;
       const map = mapRef.current;
-      
-      const isGhost = theme === 'ghost';
-      const phantomPurple = '#B388FF';
-      const ghostPriv = '#CE93D8';
-      const ghostGov = '#D500F9';
-
-      const flightCom = isGhost ? phantomPurple : '#00E5FF';
-      const flightPriv = isGhost ? ghostPriv : '#FFD700';
-      const flightGov = isGhost ? ghostGov : '#FF9500';
-      const flightMil = '#FF0000';
 
       const updateMapIcon = (id: string, color: string, size: number) => {
         if (!map.hasImage(id)) return;
@@ -1153,139 +1943,213 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         map.updateImage(id, { width: size, height: size, data: new Uint8Array(ctx.getImageData(0, 0, size, size).data) });
       };
 
-      updateMapIcon('plane-cyan', flightCom, 24);
-      updateMapIcon('plane-green', flightPriv, 24);
-      updateMapIcon('plane-pink', flightGov, 24);
-      updateMapIcon('plane-red', flightMil, 24);
-      updateMapIcon('plane-grey', isGhost ? phantomPurple : '#546E7A', 24);
-    }, [mapReady, theme]);
+      updateMapIcon('plane-cyan', palette.flightCivil, 24);
+      updateMapIcon('plane-green', palette.flightPrivate, 24);
+      updateMapIcon('plane-pink', palette.flightGov, 24);
+      updateMapIcon('plane-red', palette.flightMilitary, 24);
+      updateMapIcon('plane-grey', palette.flightUnknown, 24);
+    }, [mapReady, palette]);
+
+  // OI's arcs take their three tones from the Style Studio (violet, magenta, indigo unless changed).
+  useEffect(() => {
+    oiGlobeRef.current?.setColors({ support: palette.oiSupport, oppose: palette.oiOppose, neutral: palette.oiNeutral });
+  }, [palette.oiSupport, palette.oiOppose, palette.oiNeutral]);
+
+    /* Cameras are circles and a label, so no image to rebuild — the colour is
+       a paint property on each. */
+    useEffect(() => {
+      if (!mapReady || !mapRef.current) return;
+      const map = mapRef.current;
+      if (map.getLayer('cctv-dots')) map.setPaintProperty('cctv-dots', 'circle-color', palette.cctv);
+      if (map.getLayer('cctv-label')) map.setPaintProperty('cctv-label', 'text-color', palette.cctv);
+    }, [mapReady, palette.cctv]);
 
   // ── DECOUPLED LAYER RENDERERS (Performance Optimized) ──
 
   useEffect(() => {
     if (!mapReady) return;
-    setGeo('earthquakes', activeLayers.earthquakes && data.earthquakes ? data.earthquakes.map((eq: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [eq.lng, eq.lat] }, properties: { magnitude: eq.magnitude, place: eq.place } })) : []);
+    setGeo('earthquakes', activeLayers.earthquakes && data.earthquakes ? data.earthquakes.map((eq: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [eq.lng, eq.lat] }, properties: { id: eq.id, magnitude: eq.magnitude, place: eq.place, depth: eq.depth, source: eq.source } })) : []);
   }, [mapReady, data.earthquakes, activeLayers.earthquakes, setGeo]);
 
-  // ── Satellite selection → build live SGP4 records for the active set ──
-  // This effect decides WHICH satellites are shown (all vs. filtered by
-  // category) and precomputes a satellite.js satrec for each so the animation
-  // loop can propagate their true orbital position every frame.
+  /** Catalogue rows -> the packed form the 3D layer draws. */
+  const toSatPoints = useCallback((rows: SatelliteRow[]): SatPoint[] => rows.map((s) => ({
+    lng: s.lng,
+    lat: s.lat,
+    altKm: s.alt,
+    color: parseColor(satColorFor(s.category, s.color, palette)),
+    // Stations are the ones an operator is usually looking for, so they get
+    // to be findable in a field of several hundred identical dots.
+    size: s.category === 'science' || /ISS|TIANGONG/i.test(s.name || '') ? 2.2 : 1,
+  })), [palette]);
+
+  /**
+   * Re-points the selection at the same satellite after a refresh.
+   *
+   * pick() returns an index into the last setPoints() array, and every poll
+   * rebuilds that array — a filtered one changes length as well as order. Left
+   * as a bare index the highlight ring quietly slides onto whichever satellite
+   * now sits at that slot, taking the readout with it.
+   */
+  const resyncSatSelection = useCallback((rows: SatelliteRow[]) => {
+    const id = satSelectedIdRef.current;
+    if (!id) return;
+    const i = rows.findIndex(r => r.noradId === id);
+    // Filtered out, or gone from the catalogue: there is nothing to point at.
+    if (i < 0) { clearSat(); return; }
+    satPickedRef.current = i;
+    satLayerRef.current?.setSelected(i);
+    // The satellite has moved since it was clicked; the readout should say where
+    // it is now, not where it was.
+    setSelectedSat(prev => (prev ? { ...prev, lat: rows[i].lat, lng: rows[i].lng, alt: rows[i].alt } : prev));
+  }, [clearSat]);
+
   useEffect(() => {
     if (!mapReady) return;
     const sats = data.satellites || [];
     const al = activeLayers as any;
-
-    let selected: any[] = [];
+    const at = Date.parse(data.satellites_at ?? '');
+    satEpochRef.current = Number.isFinite(at) ? at : null;
+    
+    // If 'All Satellites' is on, show everything
     if (al.satellites) {
-      selected = sats;
-    } else {
-      const enabledCategories: string[] = [];
-      if (al.sat_comms) enabledCategories.push('comms');
-      if (al.sat_military) enabledCategories.push('military');
-      if (al.sat_navigation) enabledCategories.push('navigation');
-      if (al.sat_earth) enabledCategories.push('earth_obs');
-      if (al.sat_science) enabledCategories.push('science');
-      if (enabledCategories.length > 0) {
-        selected = sats.filter((s: any) => enabledCategories.includes(s.category));
-      }
+      setGeo('satellites', sats.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: satColorFor(s.category, s.color, palette), mission: s.mission, alt: s.alt, noradId: s.noradId, category: s.category } })));
+      satRowsRef.current = sats;
+      satLayerRef.current?.setPoints(toSatPoints(sats));
+      resyncSatSelection(sats);
+      return;
     }
-
-    const anyOn = selected.length > 0;
-    setSatActive(anyOn);
-
-    if (!anyOn) {
-      satRecordsRef.current = [];
+    
+    // Otherwise filter by enabled sub-layers
+    const enabledCategories: string[] = [];
+    if (al.sat_comms) enabledCategories.push('comms');
+    if (al.sat_military) enabledCategories.push('military');
+    if (al.sat_navigation) enabledCategories.push('navigation');
+    if (al.sat_earth) enabledCategories.push('earth_obs');
+    if (al.sat_science) enabledCategories.push('science');
+    
+    if (enabledCategories.length === 0) {
       setGeo('satellites', []);
+      satRowsRef.current = [];
+      satLayerRef.current?.setPoints([]);
+      clearSat();
       return;
     }
-
-    // Build SGP4 records. Satellites that arrive with TLE lines get true
-    // orbital propagation; any without fall back to their static position.
-    const records: Array<{ satrec: any; color: string; name: string; mission: string; noradId: string; category: string; alt: number }> = [];
-    const staticFeatures: any[] = [];
-    for (const s of selected) {
-      if (s.tle1 && s.tle2) {
-        try {
-          const satrec = satellite.twoline2satrec(s.tle1, s.tle2);
-          if (satrec && !satrec.error) {
-            records.push({ satrec, color: s.color, name: s.name, mission: s.mission, noradId: s.noradId, category: s.category, alt: s.alt });
-            continue;
-          }
-        } catch { /* fall through to static */ }
-      }
-      staticFeatures.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: s.color, mission: s.mission, alt: s.alt, noradId: s.noradId, category: s.category } });
-    }
-    satRecordsRef.current = records;
-
-    // Immediate first paint (also covers the paused / no-TLE case) so dots
-    // appear instantly without waiting for the first animation frame.
-    const now = new Date();
-    const gmstNow = satellite.gstime(now);
-    const feats = staticFeatures.slice();
-    for (const r of records) {
-      const f = propagateSatFeature(r, now, gmstNow);
-      if (f) feats.push(f);
-    }
-    setGeo('satellites', feats);
-  }, [mapReady, data.satellites, activeLayers.satellites, (activeLayers as any).sat_comms, (activeLayers as any).sat_military, (activeLayers as any).sat_navigation, (activeLayers as any).sat_earth, (activeLayers as any).sat_science, setGeo]);
-
-  // ── Animation loop: advance a simulated clock and re-propagate orbits ──
-  useEffect(() => {
-    if (!mapReady || !satActive) {
-      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-      return;
-    }
-
-    let lastRender = 0;
-    const tick = (ts: number) => {
-      rafRef.current = requestAnimationFrame(tick);
-      if (lastFrameRef.current === 0) lastFrameRef.current = ts;
-      const dt = ts - lastFrameRef.current; // real ms since last frame
-      lastFrameRef.current = ts;
-
-      // While paused, nothing moves — leave the last positions on screen and
-      // skip all recomputation.
-      if (!satPlayingRef.current) return;
-
-      // Advance the simulated clock.
-      simOffsetRef.current += dt * satSpeedRef.current;
-
-      const records = satRecordsRef.current;
-      if (records.length === 0) return;
-
-      // Adaptive throttle: keep the update cadence light when many satellites
-      // are active so mobile stays smooth (more sats → slightly slower redraw).
-      const updateMs = Math.min(500, Math.max(70, records.length / 20));
-      if (ts - lastRender < updateMs) return;
-      lastRender = ts;
-
-      const simDate = new Date(Date.now() + simOffsetRef.current);
-      const gmstNow = satellite.gstime(simDate);
-      const feats: any[] = [];
-      for (const r of records) {
-        const f = propagateSatFeature(r, simDate, gmstNow);
-        if (f) feats.push(f);
-      }
-      setGeo('satellites', feats);
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-      lastFrameRef.current = 0;
-    };
-  }, [mapReady, satActive, setGeo]);
+    
+    const filtered = sats.filter((s: any) => enabledCategories.includes(s.category));
+    setGeo('satellites', filtered.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { name: s.name, color: satColorFor(s.category, s.color, palette), mission: s.mission, alt: s.alt, noradId: s.noradId, category: s.category } })));
+    satRowsRef.current = filtered;
+    satLayerRef.current?.setPoints(toSatPoints(filtered));
+    resyncSatSelection(filtered);
+  }, [mapReady, data.satellites, activeLayers.satellites, (activeLayers as any).sat_comms, (activeLayers as any).sat_military, (activeLayers as any).sat_navigation, (activeLayers as any).sat_earth, (activeLayers as any).sat_science, data.satellites_at, setGeo, toSatPoints, resyncSatSelection, clearSat]);
 
   useEffect(() => {
     if (!mapReady) return;
-    setGeo('gdelt', activeLayers.global_incidents && data.gdelt ? data.gdelt.map((e: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lng, e.lat] }, properties: { name: e.name } })) : []);
+    // url has to travel with the feature: /api/gdelt gives every event its own
+    // GDACS report link, and dropping it here is what left the popup with
+    // nothing to link to.
+    setGeo('gdelt', activeLayers.global_incidents && data.gdelt ? data.gdelt.map((e: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [e.lng, e.lat] }, properties: { name: e.name, url: e.url, kind: e.type } })) : []);
   }, [mapReady, data.gdelt, activeLayers.global_incidents, setGeo]);
+
+  /* ── GDELT 2.0 Events ── */
+  useEffect(() => {
+    if (!mapReady) return;
+    const al = activeLayers as any;
+    setGeo('gdelt-events', al.gdelt_events && data.gdelt_events ? data.gdelt_events.map((e: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [e.lng, e.lat] },
+      properties: {
+        name: e.name, country: e.country, quad: e.quad, quad_label: e.quad_label,
+        tone: e.tone, goldstein: e.goldstein, articles: e.articles, url: e.url, date: e.date,
+      },
+    })) : []);
+  }, [mapReady, data.gdelt_events, (activeLayers as any).gdelt_events, setGeo]);
+
+  /* ── Cloudflare Radar: outages ── */
+  useEffect(() => {
+    if (!mapReady) return;
+    const al = activeLayers as any;
+    setGeo('cf-outages', al.cf_outages && data.cf_outages ? data.cf_outages.map((o: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [o.lng, o.lat] },
+      properties: {
+        country: o.country, country_name: o.country_name, scope: o.scope, cause: o.cause,
+        event_type: o.event_type, description: o.description, start: o.start, end: o.end,
+        ongoing: !!o.ongoing, url: o.url,
+      },
+    })) : []);
+  }, [mapReady, data.cf_outages, (activeLayers as any).cf_outages, setGeo]);
+
+  /* ── Cloudflare Radar: attack origins ── */
+  useEffect(() => {
+    if (!mapReady) return;
+    const al = activeLayers as any;
+    setGeo('cf-attacks', al.cf_attacks && data.cf_attack_origins ? data.cf_attack_origins.map((a: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [a.lng, a.lat] },
+      properties: { country: a.country, country_name: a.country_name, share: a.share },
+    })) : []);
+  }, [mapReady, data.cf_attack_origins, (activeLayers as any).cf_attacks, setGeo]);
 
   // Malware Threats
   useEffect(() => {
     if (!mapReady) return;
-    setGeo('malware-nodes', activeLayers.malware && data.malware_threats ? data.malware_threats.map((t: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [t.lng, t.lat] }, properties: { ip: t.ip, malware: t.malware, status: t.status, threat_type: t.threat_type, country: t.country } })) : []);
+    setGeo('malware-nodes', activeLayers.malware && data.malware_threats ? data.malware_threats.map((t: any) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [t.lng, t.lat] },
+      properties: {
+        ip: t.ip, malware: t.malware, status: t.status, threat_type: t.threat_type,
+        country: t.country, city: t.city, port: t.port,
+        asn: t.asn, as_name: t.as_name,
+        // How many live malicious URLs this host serves — the dot is sized by
+        // it, so a box distributing forty payloads reads bigger than one.
+        url_count: t.url_count ?? 1,
+        first_seen: t.first_seen, last_seen: t.last_seen,
+        reference: t.reference, reporter: t.reporter,
+        detected_at: t.detected_at ?? 0,
+      },
+    })) : []);
+  }, [mapReady, data.malware_threats, activeLayers.malware, setGeo]);
+
+  /* Detections that landed while the operator was watching get a ring for a
+     minute. Without it a pushed feed is indistinguishable from a static one —
+     nodes simply appear, and the thing that makes it live goes unseen. */
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !activeLayers.malware) return;
+    const map = mapRef.current;
+
+    /* Arrivals are rare — a handful an hour — so the common case is that there
+       is nothing to draw. Tracking whether the last tick drew anything keeps
+       this from pushing an empty collection into the source five times a
+       second for the entire time the layer is on. */
+    let drawing = false;
+
+    const tick = () => {
+      const now = Date.now();
+      const beacons = arrivalBeacons(data.malware_threats ?? [], now);
+
+      if (beacons.length === 0) {
+        if (drawing) { setGeo('malware-new', []); drawing = false; }
+        return;
+      }
+
+      setGeo('malware-new', beacons.map(b => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [b.lng, b.lat] },
+        properties: { age: b.age },
+      })));
+      drawing = true;
+
+      try {
+        // One shared pulse, so the ring reads as a beacon rather than each
+        // node breathing on its own schedule.
+        map.setPaintProperty('malware-new-ring', 'circle-radius',
+          ['interpolate', ['linear'], ['get', 'age'], 0, 6 + Math.sin(now / 200) * 2, 1, 26]);
+      } catch { /* style not settled yet */ }
+    };
+
+    tick();
+    const timer = setInterval(tick, 200);
+    return () => { clearInterval(timer); setGeo('malware-new', []); };
   }, [mapReady, data.malware_threats, activeLayers.malware, setGeo]);
 
   // Network Mesh Generation (Nearest Neighbor Lattice)
@@ -1311,11 +2175,38 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setGeo('network-mesh', meshLinks);
   }, [mapReady, activeLayers.malware, data.malware_threats, setGeo]);
 
-
+  /* ══ BOTNET C2 INFRASTRUCTURE ══
+     Static dots, no animation. The arcs that used to fly across this layer
+     were drawn between a fabricated attacker origin and the C2's country, and
+     the marching-ants animation read as traffic that no source had observed.
+     A blocklist has no motion in it. */
   useEffect(() => {
-    if (!mapReady) return;
-    setGeo('gps-jamming', activeLayers.gps_jamming && data.gps_jamming ? data.gps_jamming.map((z: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [z.lng, z.lat] }, properties: { severity: z.severity } })) : []);
-  }, [mapReady, data.gps_jamming, activeLayers.gps_jamming, setGeo]);
+    if (!mapReady || !mapRef.current) return;
+    const al = activeLayers as any;
+    const indicators = data.cyber_attacks;
+
+    if (!al.cyber_attacks || !indicators?.length) {
+      setGeo('cyber-heads', []);
+      return;
+    }
+
+    // A C2 whose hosting country is unknown has no honest position on a map.
+    const dots = indicators
+      .filter((c: any) => typeof c.lng === 'number' && typeof c.lat === 'number')
+      .map((c: any) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+        properties: {
+          id: c.id, ip: c.ip, port: c.port, malware: c.malware, status: c.status,
+          hostname: c.hostname, country: c.country, as_number: c.as_number, as_name: c.as_name,
+          first_seen: c.first_seen, last_online: c.last_online,
+        },
+      }));
+
+    setGeo('cyber-heads', dots);
+  }, [mapReady, (activeLayers as any).cyber_attacks, data.cyber_attacks, setGeo]);
+
+
 
   useEffect(() => {
     if (!mapReady) return;
@@ -1334,7 +2225,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
   useEffect(() => {
     if (!mapReady) return;
-    setGeo('infrastructure', activeLayers.infrastructure && data.infrastructure ? data.infrastructure.map((i: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [i.lng, i.lat] }, properties: { name: i.name, city: i.city, country: i.country, status: i.status, reactors: i.reactors, capacityMW: i.capacityMW, owner: i.owner } })) : []);
+    setGeo('infrastructure', activeLayers.infrastructure && data.infrastructure ? data.infrastructure.map((i: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [i.lng, i.lat] }, properties: { name: i.name, city: i.city, country: i.country, status: i.status, reactors: i.reactors, capacityMW: i.capacityMW, owner: i.owner, sourceUrl: i.sourceUrl ?? null } })) : []);
   }, [mapReady, data.infrastructure, activeLayers.infrastructure, setGeo]);
 
   useEffect(() => {
@@ -1401,17 +2292,72 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setGeo('live-news', activeLayers.live_news && data.live_feeds ? data.live_feeds.map((f: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] }, properties: { name: f.name, city: f.city, country: f.country, url: f.url, category: f.category, embed_allowed: f.embed_allowed !== false } })) : []);
   }, [mapReady, data.live_feeds, activeLayers.live_news, setGeo]);
 
+  // Live Alert pins. Kept whole in the ref even when the layer is off, so the
+  // feed's locate button can still open a report's pin.
   useEffect(() => {
     if (!mapReady) return;
-    const items = data.news || [];
-    setGeo('sigint-news', activeLayers.news_intel && items.length > 0
-      ? items.filter((n: any) => n.coords?.length === 2).map((n: any) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [n.coords[1], n.coords[0]] },
-          properties: { title: n.title, source: n.source, risk_score: n.risk_score, link: n.link }
-        }))
-      : []);
-  }, [mapReady, data.news, activeLayers.news_intel, setGeo]);
+    const reports: PinnedReport[] = Array.isArray(data.alert_pins) ? data.alert_pins : [];
+    /* The feed hides what its filters exclude; the map follows it, so a search
+       or a theatre filter narrows the pins to the reports being read. */
+    const shown = alertPinIds ? new Set(alertPinIds) : null;
+    const now = Date.now();
+
+    const placed = reports.flatMap((n): { n: PinnedReport; lat: number; lng: number }[] => {
+      if (!n?.place || !Array.isArray(n.coords)) return [];
+      const [lat, lng] = n.coords;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+      if (shown && !shown.has(n.id)) return [];
+      return [{ n, lat, lng }];
+    });
+
+    // How many reports name each place, so a town can say it carries several.
+    const perPlace = new Map<string, number>();
+    for (const { lat, lng } of placed) {
+      const key = `${lat},${lng}`;
+      perPlace.set(key, (perPlace.get(key) ?? 0) + 1);
+    }
+
+    alertPinsRef.current = placed.map(({ n, lat, lng }): AlertPinFeature => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: {
+        id: n.id,
+        kind: n.alert_kind === 'rocket' || n.alert_kind === 'event' ? n.alert_kind : 'news',
+        stack: perPlace.get(`${lat},${lng}`) ?? 1,
+        fresh: now - Date.parse(n.published) < ALERT_FRESH_MS,
+        title: n.title,
+        source_name: n.source_name,
+        lean: n.lean ?? '',
+        published: n.published,
+        link: n.link ?? '',
+        place_name: n.place!.name,
+        place_label: n.place!.label,
+        precision: n.place!.precision,
+        media_kind: n.media?.kind ?? '',
+        video: n.media?.video ?? '',
+        thumb: n.media?.thumb ?? '',
+        duration: n.media?.duration ?? '',
+      },
+    }));
+    setGeo('alert-pins', activeLayers.alert_pins ? alertPinsRef.current : []);
+  }, [mapReady, data.alert_pins, activeLayers.alert_pins, alertPinIds, setGeo]);
+
+  /* The newest reports pulse, so something that just landed catches the eye
+     without the other pins moving. Same 200ms tick the malware ring uses. */
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !activeLayers.alert_pins) return;
+    const map = mapRef.current;
+    const tick = () => {
+      try {
+        map.setPaintProperty('alert-pin-pulse', 'circle-radius', 9 + Math.sin(Date.now() / 260) * 3.5);
+        map.setPaintProperty('alert-pin-pulse', 'circle-stroke-opacity', 0.55 + Math.sin(Date.now() / 260) * 0.25);
+      } catch { /* style not settled yet */ }
+    };
+    tick();
+    const timer = setInterval(tick, 200);
+    return () => clearInterval(timer);
+  }, [mapReady, activeLayers.alert_pins]);
+
 
   useEffect(() => {
     if (!mapReady) return;
@@ -1425,34 +2371,24 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
         const conflictData = await res.json();
         if (cancelled) return;
 
-        // Zone anchor markers (war/high/elevated labels)
+        /* One marker per zone. The headlines that mention a zone are listed in
+           its popup, not plotted: a headline names a place, not where on the
+           map something happened. */
         const zoneFeatures = (conflictData.zones || []).map((z: any) => ({
           type: 'Feature' as const,
           geometry: { type: 'Point' as const, coordinates: [z.lng, z.lat] },
-          properties: { 
-            label: z.label, 
-            severity: z.severity, 
-            description: `${z.description}${z.eventCount > 0 ? ` [${z.eventCount} live events detected]` : ''}`,
+          properties: {
+            label: z.label,
+            severity: z.severity,
+            description: z.description,
             sourceUrl: z.sourceUrl,
-            eventCount: z.eventCount,
+            headlineCount: z.headlineCount ?? 0,
+            // Feature properties come back flat, so the list travels as JSON.
+            headlines: JSON.stringify((z.headlines || []).slice(0, 4)),
           },
         }));
 
-        // Individual live conflict events (scatter dots across conflict zones)
-        const eventFeatures = (conflictData.liveEvents || [])
-          .filter((e: any) => e.lat && e.lng)
-          .map((e: any) => ({
-            type: 'Feature' as const,
-            geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] },
-            properties: { 
-              label: (e.title || 'CONFLICT EVENT').substring(0, 60).toUpperCase(),
-              severity: 'war',
-              description: e.title || 'Live conflict event detected by GDELT.',
-              sourceUrl: e.url || '',
-            },
-          }));
-
-        setGeo('conflict-zones', [...zoneFeatures, ...eventFeatures]);
+        setGeo('conflict-zones', zoneFeatures);
       } catch (e) {
         // Fallback: if API fails, use minimal known zones
         const FALLBACK_ZONES = [
@@ -1480,12 +2416,20 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     if (!mapReady) return;
     setVis(['eq-circles','eq-label'], activeLayers.earthquakes);
     const anySat = activeLayers.satellites || (activeLayers as any).sat_comms || (activeLayers as any).sat_military || (activeLayers as any).sat_navigation || (activeLayers as any).sat_earth || (activeLayers as any).sat_science;
-    setVis(['sat-glow','sat-dots'], anySat);
+    // The circle layers stay hidden whatever the toggles say — the 3D layer
+    // is the single representation, and showing both drew every satellite
+    // twice, once flat on the ground and once at altitude.
+    setVis(['sat-glow','sat-dots'], false);
+    // Clearing the 3D layer is what actually turns satellites off.
+    if (!anySat) { satRowsRef.current = []; satLayerRef.current?.setPoints([]); }
     setVis(['gdelt-dots'], activeLayers.global_incidents);
+    setVis(['gdelt-events-dots'], (activeLayers as any).gdelt_events);
+    setVis(['cf-outage-halo','cf-outage-dots','cf-outage-label'], (activeLayers as any).cf_outages);
+    setVis(['cf-attack-dots','cf-attack-label'], (activeLayers as any).cf_attacks);
 
-    setVis(['malware-glow','malware-dots','malware-label'], activeLayers.malware);
+    setVis(['malware-glow','malware-dots','malware-label','malware-new-ring'], activeLayers.malware);
     setVis(['network-mesh-atmo', 'network-mesh-glow', 'network-mesh-core'], activeLayers.internet_outages || activeLayers.malware);
-    setVis(['jam-fill','jam-label'], activeLayers.gps_jamming);
+    setVis(['cyber-heads','cyber-labels'], (activeLayers as any).cyber_attacks);
     setVis(['day-night-fill'], activeLayers.day_night);
     setVis(['fl-commercial'], activeLayers.flights);
     setVis(['fl-private'], activeLayers.private);
@@ -1499,7 +2443,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     setVis(['choke-glow','choke-dots','choke-label'], activeLayers.maritime);
     setVis(['ship-dots','ship-label'], activeLayers.maritime);
     setVis(['news-glow','news-dots','news-label'], activeLayers.live_news);
-    setVis(['sigint-news-glow','sigint-news-dots','sigint-news-label'], activeLayers.news_intel);
+    setVis(['alert-pin-glow','alert-pin-dots','alert-pin-label','alert-pin-pulse','alert-pin-selected'], activeLayers.alert_pins);
     setVis(['conflict-icons'], activeLayers.conflict_zones !== false);
 
     setVis(['balloon-dots','balloon-label'], activeLayers.balloons);
@@ -1529,7 +2473,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
     // Switch to globe and fly to the sweep location
     try {
-      (map as any).setProjection({ type: 'globe' });
+      applyMapProjection(map, 'globe');
       map.setSky({ 'sky-color': '#0A0A0F', 'sky-horizon-blend': 0.02, 'horizon-color': '#0A0A0F', 'horizon-fog-blend': 0.02 });
     } catch { /* projection may not be supported */ }
 
@@ -1597,51 +2541,71 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     if (src) src.setData({ type: 'FeatureCollection', features });
   }, [scanTargets, mapReady]);
 
-  // Fly-to
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !flyToLocation) return;
-    mapRef.current.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom || 8, duration: 2000 });
-  }, [mapReady, flyToLocation]);
-
-  // Dynamic projection switching (lightweight — no terrain DEM)
+  // Projection changes are independent of terrain. Toggling elevation must not
+  // zoom, tilt, or reposition the camera the user has already chosen.
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
     try {
-      (map as any).setProjection({ type: projection });
+      const projectionChanged = applyMapProjection(map, projection, terrainEnabled);
+      const configureSky = projectionChanged || !containerRef.current?.dataset.mapProjection;
+      if (containerRef.current) containerRef.current.dataset.mapProjection = projection;
       if (projection === 'globe') {
-        map.easeTo({ pitch: 20, duration: 1200 });
+        // The overview globe's resting tilt, which used to be the initial
+        // pitch. Only on a real projection change, so toggling terrain never
+        // re-tilts a camera the user has already placed.
+        if (configureSky && map.getPitch() < 0.5) map.easeTo({ pitch: 20, duration: 1200 });
         try {
-          // Altitude-driven sky: dark/space-like when viewing the whole globe
-          // from orbit (low zoom), transitioning to a genuinely lighter,
-          // natural atmosphere-blue as you descend toward ground level (high
-          // zoom) — real daytime sky is bright blue, not black. Color
-          // interpolation via MapLibre native zoom expressions; a full
-          // Rayleigh/Mie scattering shader layer is tracked separately.
-          (map as any).setSky({
-            'sky-color': ['interpolate', ['linear'], ['zoom'], 0, '#05070f', 2, '#05070f', 5, '#1a3a5c', 8, '#4a90d9'],
-            'sky-horizon-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.6, 3, 0.5, 6, 0.35, 9, 0.25],
-            // Glowing blue atmospheric scattering rim (Fresnel-like edge),
-            // brightening as the camera nears the surface.
-            'horizon-color': ['interpolate', ['linear'], ['zoom'], 0, '#2f6bff', 5, '#5B9BD5', 8, '#B3D9FF'],
-            'horizon-fog-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.5, 5, 0.35, 9, 0.15],
-            'fog-color': ['interpolate', ['linear'], ['zoom'], 0, '#05070f', 5, '#2a4a6a', 8, '#8FC1EA'],
-            'fog-ground-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 6, 0.6, 9, 0.3],
-            // Visible atmosphere on the globe — strong from orbit, eases off
-            // as you zoom into countries so terrain reads clean. Interpolated
-            // per MapLibre guidance for globe projection. Visual-only.
-            'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 3, 0.55, 6, 0.2],
+          if (configureSky) map.setSky({
+            'sky-color': '#04040A',
+            'sky-horizon-blend': 0.5,
+            'horizon-color': '#0a0a1a',
+            'horizon-fog-blend': 0.3,
+            'fog-color': '#04040A',
+            'fog-ground-blend': 0.9,
           });
         } catch (e) { console.warn('[OSIRIS] Suppressed error:', e instanceof Error ? e.message : e); }
       } else {
-        map.easeTo({ pitch: 0, duration: 800 });
+        if (map.getPitch() > 0.5) map.easeTo({ pitch: 0, duration: 350 });
       }
     } catch (e) {
       console.warn('Projection switch failed:', e);
     }
-  }, [mapReady, projection]);
+  }, [mapReady, projection, terrainEnabled]);
 
-  // 3D Terrain & Buildings layer
+  // Terrain loads only at regional zooms; globe overview stays inexpensive.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !terrainEnabled) return;
+    const map = mapRef.current;
+    installTerrainTileProtocol(maplibregl.addProtocol);
+    const dispose = attachTerrain(map, status => onTerrainStatusChange?.(status));
+    return () => {
+      // The map constructor effect removes the entire map first on unmount.
+      if (mapRef.current === map) dispose();
+    };
+  }, [mapReady, terrainEnabled, terrainRetry, onTerrainStatusChange]);
+
+  // A user-requested close-up keeps the current location and avoids a fly-out arc.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !terrainFocus || !terrainEnabled || lastTerrainFocus.current === terrainFocus) return;
+    lastTerrainFocus.current = terrainFocus;
+    const map = mapRef.current;
+    map.easeTo({ zoom: Math.max(10.5, map.getZoom()), pitch: 45, duration: 650 });
+  }, [mapReady, terrainFocus, terrainEnabled]);
+
+  // Fly-to
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !flyToLocation) return;
+    const map = mapRef.current;
+    map.flyTo({ center: [flyToLocation.lng, flyToLocation.lat], zoom: flyToLocation.zoom ?? 8, duration: flyToLocation.duration ?? 2000 });
+    const alertId = flyToLocation.alertId;
+    if (!alertId) return;
+    const open = () => openAlertPinRef.current?.(alertId);
+    map.once('moveend', open);
+    return () => { map.off('moveend', open); };
+  }, [mapReady, flyToLocation]);
+
+  // 3D buildings are independent of the elevation renderer.
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
@@ -1649,19 +2613,14 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
 
     try {
       if (enabled) {
-        // ── 3D BUILDINGS SOURCE (OpenFreeMap CDN — no API key, globally cached) ──
-        if (!map.getSource('osiris-buildings')) {
-          map.addSource('osiris-buildings', {
-            type: 'vector',
-            url: 'https://tiles.openfreemap.org/planet',
-          });
-        }
+        // CARTO's already-loaded vector tiles include the building footprints
+        // and render heights. No second worldwide vector source is needed.
 
         // ── 3D BUILDING EXTRUSION LAYER ──
         if (!map.getLayer('osiris-3d-buildings')) {
           map.addLayer({
             id: 'osiris-3d-buildings',
-            source: 'osiris-buildings',
+            source: 'carto',
             'source-layer': 'building',
             type: 'fill-extrusion',
             minzoom: 14.5,
@@ -1710,8 +2669,6 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
   // Satellite / Dark style switching
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
-    if (mapStyle === prevStyleRef.current) return;
-    prevStyleRef.current = mapStyle;
     const map = mapRef.current;
 
     try {
@@ -1724,6 +2681,8 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
             tileSize: 256,
             maxzoom: 18,
           });
+        }
+        if (!map.getLayer('satellite-layer')) {
           map.addLayer({ id: 'satellite-layer', type: 'raster', source: 'satellite-tiles', paint: { 'raster-opacity': 0.85 } }, 'day-night-fill');
         } else {
           map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
@@ -1738,97 +2697,781 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     }
   }, [mapReady, mapStyle]);
 
-  const accent = theme === 'ghost' ? '#B388FF' : '#00E5FF';
-  const speedLabel = satSpeed >= 1 ? `${Math.round(satSpeed)}×` : `${satSpeed}×`;
+  // Live Clouds — NOAA's satellite mosaic, hung at cloud altitude over the
+  // ground; see lib/live-clouds-layer. Under the night shade and every marker.
+  // On the map they also sit under the place names, as on any weather map, so
+  // a storm never hides a city's name; on SAT they go above the imagery, which
+  // covers those names anyway. Nothing is fetched until the layer is first
+  // switched on, and switching it off frees what it held on the GPU.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    if (!activeLayers.live_clouds) {
+      if (map.getLayer(CLOUDS_LAYER)) map.removeLayer(CLOUDS_LAYER);
+      if (map.getLayer(CLOUDS_CREDIT)) map.removeLayer(CLOUDS_CREDIT);
+      cloudLayerRef.current = null;
+      return;
+    }
+    if (!cloudLayerRef.current || !map.getLayer(CLOUDS_LAYER)) {
+      cloudLayerRef.current = createCloudLayer(CLOUDS_LAYER);
+      map.addLayer(cloudLayerRef.current, 'day-night-fill');
+    }
+    const clouds = cloudLayerRef.current;
+    clouds.setFrame(frameTime());
+    // MapLibre credits the sources its visible layers draw from. The clouds
+    // come from no source of its own, so an empty one carries NOAA's credit.
+    if (!map.getSource(CLOUDS_CREDIT)) map.addSource(CLOUDS_CREDIT, { type: 'geojson', data: EMPTY_FC, attribution: CLOUDS_ATTRIBUTION });
+    if (!map.getLayer(CLOUDS_CREDIT)) map.addLayer({ id: CLOUDS_CREDIT, type: 'circle', source: CLOUDS_CREDIT });
+    const satellite = map.getLayer('satellite-layer') && map.getLayoutProperty('satellite-layer', 'visibility') !== 'none';
+    const firstLabel = map.getStyle().layers.find(layer => layer.type === 'symbol')?.id;
+    map.moveLayer(CLOUDS_LAYER, satellite || !firstLabel ? 'day-night-fill' : firstLabel);
+    // A new frame lands every hour; move to it once it is up.
+    const refresh = setInterval(() => clouds.setFrame(frameTime()), 5 * 60_000);
+    return () => clearInterval(refresh);
+  }, [mapReady, activeLayers.live_clouds, mapStyle]);
+
+  // Rain — RainViewer's radar mosaic, keyless, its last two hours as a loop.
+  // RainBar (rendered below) adds the frames and holds their time slider.
+
+  // Wind — NOAA GFS surface wind as moving trails, through time. WindBar draws
+  // it and holds the time slider; this only credits the source while it's on.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    if (!activeLayers.wind) {
+      if (map.getLayer('wind-credit')) map.removeLayer('wind-credit');
+      if (map.getSource('wind-credit')) map.removeSource('wind-credit');
+      return;
+    }
+    if (!map.getSource('wind-credit')) map.addSource('wind-credit', { type: 'geojson', data: EMPTY_FC, attribution: WIND_ATTRIBUTION });
+    if (!map.getLayer('wind-credit')) map.addLayer({ id: 'wind-credit', type: 'circle', source: 'wind-credit' });
+  }, [mapReady, activeLayers.wind, mapStyle]);
+
+  // OSIRIS OI — a prediction drawn as it happens: actors, the events of the
+  // simulated worlds and arcs through the sky (see lib/oi/globe). The page feeds it
+  // run state directly, so the map does not re-render on every event; the
+  // layer re-adds itself after a style change.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const globe = attachOi(mapRef.current, {
+      onSelect: key => onOiSelectRef.current?.(key),
+      onHover: hover => onOiHoverRef.current?.(hover),
+      onFollowChange: following => onOiFollowRef.current?.(following),
+    });
+    globe.setColors({ support: paletteRef.current.oiSupport, oppose: paletteRef.current.oiOppose, neutral: paletteRef.current.oiNeutral });
+    oiGlobeRef.current = globe;
+    onOiGlobeRef.current?.(globe);
+    return () => {
+      oiGlobeRef.current = null;
+      onOiGlobeRef.current?.(null);
+      globe.destroy();
+    };
+  }, [mapReady]);
+
+  // OI Assist's marks: attached once the map is up, fed whatever the assistant marks.
+  const highlighterRef = useRef<Highlighter | null>(null);
+  const oiHighlightRef = useRef(oiHighlight);
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const h = attachHighlights(mapRef.current);
+    h.set(oiHighlightRef.current);
+    highlighterRef.current = h;
+    return () => { highlighterRef.current = null; h.destroy(); };
+  }, [mapReady]);
+  useEffect(() => {
+    oiHighlightRef.current = oiHighlight;
+    highlighterRef.current?.set(oiHighlight);
+  }, [oiHighlight]);
+
+  // ── DRAWN POLYGONS ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const currentPolygons = drawnPolygons || [];
+    const currentIds = currentPolygons.map(p => p.id);
+    
+    prevDrawnPolygonsRef.current.forEach(id => {
+      if (!currentIds.includes(id)) {
+        if (map.getLayer(`drawn-polygon-label-${id}`)) map.removeLayer(`drawn-polygon-label-${id}`);
+        if (map.getLayer(`drawn-polygon-line-${id}`)) map.removeLayer(`drawn-polygon-line-${id}`);
+        if (map.getLayer(`drawn-polygon-fill-${id}`)) map.removeLayer(`drawn-polygon-fill-${id}`);
+        if (map.getSource(`drawn-polygon-${id}-label`)) map.removeSource(`drawn-polygon-${id}-label`);
+        if (map.getSource(`drawn-polygon-${id}`)) map.removeSource(`drawn-polygon-${id}`);
+      }
+    });
+    prevDrawnPolygonsRef.current = currentIds;
+
+    currentPolygons.forEach(poly => {
+      const sourceId = `drawn-polygon-${poly.id}`;
+      const fillLayerId = `drawn-polygon-fill-${poly.id}`;
+      const lineLayerId = `drawn-polygon-line-${poly.id}`;
+      const labelLayerId = `drawn-polygon-label-${poly.id}`;
+
+      // Build a centroid point feature for the label. A Polygon nests its ring
+      // one level deeper than a LineString, so the label of a path would sit at
+      // 0,0 if both were read the same way.
+      const geom: any = poly.geojson.geometry;
+      const ring: number[][] = geom?.type === 'LineString' ? (geom.coordinates || []) : (geom?.coordinates?.[0] || []);
+      const centroid = ring.length > 0 ? [
+        ring.reduce((s: number, c: number[]) => s + c[0], 0) / ring.length,
+        ring.reduce((s: number, c: number[]) => s + c[1], 0) / ring.length,
+      ] : [0, 0];
+      const labelFC = { type: 'FeatureCollection' as const, features: [{ type: 'Feature' as const, properties: { name: poly.name }, geometry: { type: 'Point' as const, coordinates: centroid } }] };
+
+      if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, { type: 'geojson', data: poly.geojson });
+      } else {
+        (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(poly.geojson);
+      }
+      if (!map.getSource(`${sourceId}-label`)) {
+        map.addSource(`${sourceId}-label`, { type: 'geojson', data: labelFC as any });
+      } else {
+        (map.getSource(`${sourceId}-label`) as maplibregl.GeoJSONSource).setData(labelFC as any);
+      }
+
+      if (!map.getLayer(fillLayerId)) {
+        map.addLayer({ id: fillLayerId, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': poly.color, 'fill-opacity': 0.12 } });
+      }
+      if (!map.getLayer(lineLayerId)) {
+        map.addLayer({ id: lineLayerId, type: 'line', source: sourceId, paint: { 'line-color': poly.color, 'line-width': 2.5, 'line-dasharray': [6, 3] } });
+      }
+      if (!map.getLayer(labelLayerId)) {
+        map.addLayer({ id: labelLayerId, type: 'symbol', source: `${sourceId}-label`, layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': poly.color, 'text-halo-color': '#000000', 'text-halo-width': 2 } });
+      }
+    });
+  }, [mapReady, drawnPolygons]);
+
+  // ── DIRECTIONS ROUTE ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+
+    const SRC = 'directions-route';
+    const SRC_ALT = 'directions-alternates';
+    const SRC_ACTIVE = 'directions-active-step';
+    const SRC_ENDS = 'directions-endpoints';
+    const IDS = [
+      'directions-alt-line', 'directions-line-casing', 'directions-line',
+      'directions-active-line', 'directions-endpoint-halo', 'directions-endpoint',
+    ];
+
+    const teardown = () => {
+      IDS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+      [SRC, SRC_ALT, SRC_ACTIVE, SRC_ENDS].forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+    };
+
+    if (!route?.geometry?.coordinates?.length) { teardown(); return; }
+
+    const fc = (features: GeoJSON.Feature[]) => ({ type: 'FeatureCollection' as const, features });
+    const line = (coords: [number, number][]): GeoJSON.Feature => ({
+      type: 'Feature', properties: {},
+      geometry: { type: 'LineString', coordinates: coords },
+    });
+    const setData = (id: string, data: unknown) => {
+      if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: data as never });
+      else (map.getSource(id) as maplibregl.GeoJSONSource).setData(data as never);
+    };
+
+    setData(SRC, fc([line(route.geometry.coordinates)]));
+    setData(SRC_ALT, fc((route.alternates || []).map(a => line(a.coordinates))));
+    setData(SRC_ACTIVE, fc(route.activeSegment?.length ? [line(route.activeSegment)] : []));
+    setData(SRC_ENDS, fc([
+      { type: 'Feature', properties: { kind: 'origin' }, geometry: { type: 'Point', coordinates: [route.from.lng, route.from.lat] } },
+      { type: 'Feature', properties: { kind: 'destination' }, geometry: { type: 'Point', coordinates: [route.to.lng, route.to.lat] } },
+    ]));
+
+    // Alternatives sit underneath, muted, so the chosen line stays unambiguous.
+    if (!map.getLayer('directions-alt-line')) {
+      map.addLayer({
+        id: 'directions-alt-line', type: 'line', source: SRC_ALT,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#5C6470',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 14, 5],
+          'line-opacity': 0.55,
+        },
+      });
+    }
+    if (!map.getLayer('directions-line-casing')) {
+      map.addLayer({
+        id: 'directions-line-casing', type: 'line', source: SRC,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#001014', 'line-width': ['interpolate', ['linear'], ['zoom'], 5, 5, 14, 11], 'line-opacity': 0.9 },
+      });
+    }
+    if (!map.getLayer('directions-line')) {
+      map.addLayer({
+        id: 'directions-line', type: 'line', source: SRC,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#00E5FF',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2.5, 14, 6],
+          'line-opacity': 0.95,
+        },
+      });
+    }
+    if (!map.getLayer('directions-active-line')) {
+      map.addLayer({
+        id: 'directions-active-line', type: 'line', source: SRC_ACTIVE,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#D4AF37',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 5, 4, 14, 9],
+          'line-opacity': 0.95,
+        },
+      });
+    }
+    if (!map.getLayer('directions-endpoint-halo')) {
+      map.addLayer({
+        id: 'directions-endpoint-halo', type: 'circle', source: SRC_ENDS,
+        paint: {
+          'circle-radius': 9,
+          'circle-color': ['match', ['get', 'kind'], 'origin', '#00FF88', '#FF3B30'],
+          'circle-opacity': 0.18,
+        },
+      });
+    }
+    if (!map.getLayer('directions-endpoint')) {
+      map.addLayer({
+        id: 'directions-endpoint', type: 'circle', source: SRC_ENDS,
+        paint: {
+          'circle-radius': 5,
+          'circle-color': ['match', ['get', 'kind'], 'origin', '#00FF88', '#FF3B30'],
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#001014',
+        },
+      });
+    }
+  }, [mapReady, route]);
+
+  // ── ROUTE FRAMING ──
+  // Kept apart from drawing so picking a step or an alternative redraws without
+  // yanking the camera back out to the whole route.
+  const routeFrameKey = route
+    ? `${route.from.lat},${route.from.lng},${route.to.lat},${route.to.lng},${route.geometry.coordinates.length}`
+    : null;
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !route?.geometry?.coordinates?.length) return;
+    const coords = route.geometry.coordinates;
+    let [west, south, east, north] = [coords[0][0], coords[0][1], coords[0][0], coords[0][1]];
+    for (const [lng, lat] of coords) {
+      if (lng < west) west = lng;
+      if (lng > east) east = lng;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+    mapRef.current.fitBounds([[west, south], [east, north]], { padding: 90, duration: 900, maxZoom: 15 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, routeFrameKey]);
+
+  // ── LIVE USER LOCATION ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+
+    const SRC = 'user-location';
+    const SRC_ACC = 'user-location-accuracy';
+    const IDS = ['user-accuracy-fill', 'user-accuracy-line', 'user-dot-pulse', 'user-dot', 'user-dot-core'];
+
+    if (!userLocation) {
+      IDS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+      [SRC, SRC_ACC].forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+      return;
+    }
+
+    const { lat, lng, accuracy } = userLocation;
+
+    // Accuracy is a real-world radius, so it must be a polygon in degrees
+    // rather than a fixed pixel circle — it has to shrink as you zoom out.
+    const ring: [number, number][] = [];
+    const r = Math.min(Math.max(accuracy ?? 0, 0), 5000);
+    if (r > 0) {
+      const dLat = r / 111320;
+      const dLng = r / (111320 * Math.cos((lat * Math.PI) / 180) || 1);
+      for (let i = 0; i <= 64; i++) {
+        const t = (i / 64) * 2 * Math.PI;
+        ring.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
+      }
+    }
+
+    const point = {
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [lng, lat] } }],
+    };
+    const accFc = {
+      type: 'FeatureCollection',
+      features: ring.length
+        ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }]
+        : [],
+    };
+
+    if (!map.getSource(SRC)) map.addSource(SRC, { type: 'geojson', data: point as never });
+    else (map.getSource(SRC) as maplibregl.GeoJSONSource).setData(point as never);
+    if (!map.getSource(SRC_ACC)) map.addSource(SRC_ACC, { type: 'geojson', data: accFc as never });
+    else (map.getSource(SRC_ACC) as maplibregl.GeoJSONSource).setData(accFc as never);
+
+    if (!map.getLayer('user-accuracy-fill')) {
+      map.addLayer({ id: 'user-accuracy-fill', type: 'fill', source: SRC_ACC, paint: { 'fill-color': '#4285F4', 'fill-opacity': 0.12 } });
+    }
+    if (!map.getLayer('user-accuracy-line')) {
+      map.addLayer({ id: 'user-accuracy-line', type: 'line', source: SRC_ACC, paint: { 'line-color': '#4285F4', 'line-width': 1, 'line-opacity': 0.35 } });
+    }
+    if (!map.getLayer('user-dot-pulse')) {
+      map.addLayer({ id: 'user-dot-pulse', type: 'circle', source: SRC, paint: { 'circle-radius': 8, 'circle-color': '#4285F4', 'circle-opacity': 0.35 } });
+    }
+    if (!map.getLayer('user-dot')) {
+      map.addLayer({ id: 'user-dot', type: 'circle', source: SRC, paint: { 'circle-radius': 7, 'circle-color': '#FFFFFF' } });
+    }
+    if (!map.getLayer('user-dot-core')) {
+      map.addLayer({ id: 'user-dot-core', type: 'circle', source: SRC, paint: { 'circle-radius': 5, 'circle-color': '#4285F4' } });
+    }
+  }, [mapReady, userLocation]);
+
+  // Pulse the halo. rAF-driven, so it stops when the tab is backgrounded.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !userLocation) return;
+    const map = mapRef.current;
+    let raf = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      if (map.getLayer('user-dot-pulse')) {
+        const t = ((now - started) % 2000) / 2000;
+        map.setPaintProperty('user-dot-pulse', 'circle-radius', 8 + t * 22);
+        map.setPaintProperty('user-dot-pulse', 'circle-opacity', 0.35 * (1 - t));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mapReady, userLocation]);
+
+  // ── FOLLOW MODE ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !followUser) return;
+    const map = mapRef.current;
+    // originalEvent is only set when a real input device drove the change, so
+    // the easeTo below cannot trip this and cancel its own follow.
+    const onGesture = (e: any) => { if (e?.originalEvent) onFollowInterrupt?.(); };
+    map.on('dragstart', onGesture);
+    map.on('zoomstart', onGesture);
+    map.on('rotatestart', onGesture);
+    map.on('pitchstart', onGesture);
+    return () => {
+      map.off('dragstart', onGesture);
+      map.off('zoomstart', onGesture);
+      map.off('rotatestart', onGesture);
+      map.off('pitchstart', onGesture);
+    };
+  }, [mapReady, followUser, onFollowInterrupt]);
+
+  // Recentering runs on every position fix, so without the handover above the
+  // map fights the operator: zoom out to look ahead and the next GPS tick drags
+  // the camera back to 16.5. Follow itself is unchanged and resumes on recenter.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !followUser || !userLocation) return;
+    // While navigating, sit close in and rotate the map so travel direction is
+    // "up" — reading a turn off a north-locked map at speed does not work.
+    mapRef.current.easeTo({
+      center: [userLocation.lng, userLocation.lat],
+      ...(navigating
+        ? {
+            zoom: Math.max(mapRef.current.getZoom(), 16.5),
+            pitch: 50,
+            ...(typeof userLocation.heading === 'number' && !Number.isNaN(userLocation.heading)
+              ? { bearing: userLocation.heading }
+              : {}),
+          }
+        : {}),
+      duration: 700,
+    });
+  }, [mapReady, followUser, userLocation, navigating]);
+
+  // Restore the selected view only when guidance ends, not on first map load.
+  useEffect(() => {
+    const ended = wasNavigating.current && !navigating;
+    wasNavigating.current = navigating;
+    if (!mapReady || !mapRef.current || !ended) return;
+    const map = mapRef.current;
+    const pitch = projection === 'mercator' ? 0 : activeLayers.terrain_3d ? 50 : terrainEnabled && map.getZoom() >= 10 ? 45 : 20;
+    map.easeTo({ pitch, bearing: 0, duration: 600 });
+  }, [mapReady, navigating, projection, terrainEnabled, activeLayers.terrain_3d]);
+
+  // ── AIRPORTS FOR WATCHED AIRCRAFT ──
+  // The endpoints that survived corroboration against the aircraft's reported
+  // track — where the leg began and where it is booked to end.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const SRC = 'watched-airports';
+    const IDS = ['watched-airport-glow', 'watched-airport-dot', 'watched-airport-label'];
+
+    // The same airport can serve several watched aircraft — draw it once.
+    const seen = new Set<string>();
+    const features = Object.values(aircraftAirports).flat()
+      .filter((a) => {
+        if (!a || seen.has(a.icao)) return false;
+        seen.add(a.icao);
+        return true;
+      })
+      .map((a) => ({
+        type: 'Feature' as const,
+        properties: { label: a.iata || a.icao, city: a.city || '' },
+        geometry: { type: 'Point' as const, coordinates: [a.lng, a.lat] },
+      }));
+
+    if (features.length === 0) {
+      IDS.forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
+      if (map.getSource(SRC)) map.removeSource(SRC);
+      return;
+    }
+
+    const fc = { type: 'FeatureCollection' as const, features };
+    if (!map.getSource(SRC)) map.addSource(SRC, { type: 'geojson', data: fc as never });
+    else (map.getSource(SRC) as maplibregl.GeoJSONSource).setData(fc as never);
+
+    if (!map.getLayer('watched-airport-glow')) {
+      map.addLayer({
+        id: 'watched-airport-glow', type: 'circle', source: SRC,
+        paint: { 'circle-radius': 13, 'circle-color': '#FFB300', 'circle-opacity': 0.16, 'circle-blur': 0.8 },
+      });
+    }
+    if (!map.getLayer('watched-airport-dot')) {
+      map.addLayer({
+        id: 'watched-airport-dot', type: 'circle', source: SRC,
+        paint: {
+          'circle-radius': 5,
+          'circle-color': '#FFFFFF',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#FFB300',
+        },
+      });
+    }
+    if (!map.getLayer('watched-airport-label')) {
+      map.addLayer({
+        id: 'watched-airport-label', type: 'symbol', source: SRC,
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-font': ['Open Sans Bold'],
+          'text-offset': [0, 1.6],
+          'text-allow-overlap': true,
+        },
+        paint: { 'text-color': '#FFB300', 'text-halo-color': '#0C0E1A', 'text-halo-width': 1.5 },
+      });
+    }
+  }, [mapReady, aircraftAirports]);
+
+  // ── ARCGIS LAYERS ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+    const currentLayers = arcgisLayers || [];
+    const currentIds = currentLayers.map(l => l.id);
+
+    prevArcgisLayersRef.current.forEach(id => {
+      if (!currentIds.includes(id)) {
+        const sourceId = `arcgis-${id}`;
+        if (map.getLayer(`${sourceId}-fill`)) map.removeLayer(`${sourceId}-fill`);
+        if (map.getLayer(`${sourceId}-line`)) map.removeLayer(`${sourceId}-line`);
+        if (map.getLayer(`${sourceId}-circle`)) map.removeLayer(`${sourceId}-circle`);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+      }
+    });
+    prevArcgisLayersRef.current = currentIds;
+
+    currentLayers.forEach(layer => {
+      const sourceId = `arcgis-${layer.id}`;
+      const c = layer.color || '#D4AF37';
+      const o = layer.opacity ?? 0.8;
+      if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, { type: 'geojson', data: layer.geojson });
+        // A fill layer with no geometry filter is applied to LineStrings too,
+        // and maplibre fills an open path by closing it — which is what draws
+        // the triangular wedges across a pipeline or railway dataset. Fill is
+        // only ever meaningful for polygons.
+        map.addLayer({ id: `${sourceId}-fill`, type: 'fill', source: sourceId, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': c, 'fill-opacity': o * 0.15, 'fill-outline-color': c } });
+        map.addLayer({ id: `${sourceId}-line`, type: 'line', source: sourceId, filter: ['match', ['geometry-type'], ['LineString', 'Polygon'], true, false], paint: { 'line-color': c, 'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.6, 10, 1.4, 14, 2, 18, 3], 'line-opacity': o } });
+        // A fixed radius does not survive a dense dataset: ~1.2k points at
+        // city zoom merge into one blob. Scaling with zoom keeps them as
+        // discrete stations when you are far out, and readable up close.
+        map.addLayer({ id: `${sourceId}-circle`, type: 'circle', source: sourceId, filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': c, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.5, 8, 2.5, 11, 4, 14, 6, 18, 9], 'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 0.4, 14, 1.2], 'circle-stroke-color': '#000', 'circle-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0.55, 12, 0.85] } });
+      } else {
+        (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(layer.geojson);
+        // Update paint properties for color/opacity changes
+        if (map.getLayer(`${sourceId}-fill`)) {
+          map.setPaintProperty(`${sourceId}-fill`, 'fill-color', c);
+          map.setPaintProperty(`${sourceId}-fill`, 'fill-opacity', o * 0.15);
+          map.setPaintProperty(`${sourceId}-fill`, 'fill-outline-color', c);
+        }
+        if (map.getLayer(`${sourceId}-line`)) {
+          map.setPaintProperty(`${sourceId}-line`, 'line-color', c);
+          map.setPaintProperty(`${sourceId}-line`, 'line-opacity', o);
+        }
+        if (map.getLayer(`${sourceId}-circle`)) {
+          map.setPaintProperty(`${sourceId}-circle`, 'circle-color', c);
+          map.setPaintProperty(`${sourceId}-circle`, 'circle-opacity', o);
+        }
+      }
+    });
+  }, [mapReady, arcgisLayers]);
+
+  const drawCbRef = useRef({ onDrawComplete, onDrawProgress, onDrawCancel });
+  /** Set by the drawing effect so on-screen buttons can dispatch into it. */
+  const drawApplyRef = useRef<((a: DrawAction) => void) | null>(null);
+  drawCbRef.current = { onDrawComplete, onDrawProgress, onDrawCancel };
+
+  // ── DRAWING MODE ──
+  // A four-mode state machine over one set of map handlers.
+  //
+  // Every mode collects points; what differs is how many are needed and what
+  // geometry they produce. Rectangle and circle are two-click shapes, so the
+  // cursor stands in for their second point until it is committed — which is
+  // what makes the preview and the final shape come from the same code path
+  // instead of two that can disagree.
+  //
+  // Escape cancels, Backspace removes the last vertex, Enter or a double click
+  // finishes. Drawing without an undo is the difference between a tool and a
+  // demo: a misplaced vertex twenty clicks in should not cost the whole shape.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+
+    const SRC = 'draw-temp-source';
+    const IDS = ['draw-fill-temp', 'draw-line-temp', 'draw-points-temp'];
+
+    const teardown = () => {
+      IDS.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+      if (map.getSource(SRC)) map.removeSource(SRC);
+      drawingCoordsRef.current = [];
+      map.getCanvas().style.cursor = '';
+      map.doubleClickZoom.enable();
+    };
+
+    if (!drawMode) {
+      teardown();
+      drawCbRef.current.onDrawProgress?.(null);
+      return;
+    }
+
+    map.doubleClickZoom.disable();
+    map.getCanvas().style.cursor = 'crosshair';
+    drawingCoordsRef.current = [];
+
+    if (!map.getSource(SRC)) {
+      map.addSource(SRC, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'draw-fill-temp', type: 'fill', source: SRC,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#00E5FF', 'fill-opacity': 0.12 },
+      });
+      map.addLayer({
+        id: 'draw-line-temp', type: 'line', source: SRC,
+        filter: ['match', ['geometry-type'], ['LineString', 'Polygon'], true, false],
+        paint: { 'line-color': '#00E5FF', 'line-width': 2, 'line-dasharray': [3, 2] },
+      });
+      map.addLayer({
+        id: 'draw-points-temp', type: 'circle', source: SRC,
+        filter: ['==', ['geometry-type'], 'MultiPoint'],
+        paint: { 'circle-color': '#00E5FF', 'circle-radius': 4, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#04040A' },
+      });
+    }
+
+    // Declared before paint(), which closes over it. Leaving it below would
+    // work only while no call happens in between — a temporal-dead-zone crash
+    // waiting for someone to add one.
+    let state: DrawState = initialDrawState(drawMode);
+
+    /** Redraw the preview from committed points plus an optional cursor point. */
+    const paint = (cursor?: [number, number]) => {
+      const committed = state.points;
+      const pts = cursor ? [...committed, cursor] : committed;
+      const src = map.getSource(SRC) as maplibregl.GeoJSONSource;
+      if (!src) return;
+
+      drawCbRef.current.onDrawProgress?.(pts.length ? measure(drawMode, pts) : null);
+
+      if (pts.length === 0) {
+        src.setData({ type: 'FeatureCollection', features: [] });
+        return;
+      }
+
+      const features: any[] = [
+        { type: 'Feature', properties: {}, geometry: { type: 'MultiPoint', coordinates: committed } },
+      ];
+
+      const geom = buildGeometry(drawMode, pts);
+      if (drawMode === 'line') {
+        if (pts.length > 1) {
+          features.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: geom } });
+        }
+      } else if (geom.length >= 3) {
+        // Show the enclosed area as it will be, not just its outline.
+        features.push({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [closeRing(geom)] } });
+      } else if (geom.length === 2) {
+        features.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: geom } });
+      }
+
+      src.setData({ type: 'FeatureCollection', features });
+    };
+
+    // The interaction lives in drawReducer, which is unit tested. This is the
+    // adapter: map events in, reducer out, preview repainted.
+    const apply = (action: DrawAction) => {
+      const t = drawReducer(state, action);
+      state = t.state;
+      drawingCoordsRef.current = state.points;
+      if (t.result) drawCbRef.current.onDrawComplete?.(t.result);
+      if (t.cancelled) drawCbRef.current.onDrawCancel?.();
+      paint();
+    };
+
+    let dblGuard = false;
+
+    const onClick = (e: any) => {
+      if (dblGuard) return;
+      apply({ type: 'click', at: [e.lngLat.lng, e.lngLat.lat] });
+    };
+
+    const onMove = (e: any) => {
+      if (state.points.length === 0) return;
+      paint([e.lngLat.lng, e.lngLat.lat]);
+    };
+
+    const onDblClick = (e: any) => {
+      e.preventDefault();
+      dblGuard = true;
+      setTimeout(() => { dblGuard = false; }, 300);
+      apply({ type: 'dblclick' });
+    };
+
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); apply({ type: 'cancel' }); }
+      else if (ev.key === 'Backspace' || ev.key === 'Delete') { ev.preventDefault(); apply({ type: 'undo' }); }
+      else if (ev.key === 'Enter') { ev.preventDefault(); apply({ type: 'finish' }); }
+    };
+    drawApplyRef.current = apply;
+
+    map.on('click', onClick);
+    map.on('mousemove', onMove);
+    map.on('dblclick', onDblClick);
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      map.off('click', onClick);
+      map.off('mousemove', onMove);
+      map.off('dblclick', onDblClick);
+      window.removeEventListener('keydown', onKey);
+      drawApplyRef.current = null;
+      teardown();
+    };
+  }, [mapReady, drawMode]);
+
+  // Buttons dispatch into the same reducer the map events use, so a shape
+  // finished by clicking "Finish" is identical to one finished by Enter.
+  const lastCmdSeq = useRef(-1);
+  useEffect(() => {
+    if (!drawCommand || drawCommand.seq === lastCmdSeq.current) return;
+    lastCmdSeq.current = drawCommand.seq;
+    drawApplyRef.current?.({ type: drawCommand.action } as DrawAction);
+  }, [drawCommand]);
+
+  // ── LIVE TRANSIT ── see lib/transit-layer: it draws, polls and animates on its own.
+  const onTransitStatusRef = useRef(onTransitStatus);
+  useEffect(() => { onTransitStatusRef.current = onTransitStatus; }, [onTransitStatus]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !activeLayers.transit) return;
+    const detach = attachTransit(map, {
+      // Through the map's one popup, so opening a vehicle closes any other card.
+      openPopup: (lngLat, html, anchor) => {
+        popupRef.current?.remove();
+        popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '420px', offset: 14, ...(anchor ? { anchor } : {}) }).setLngLat(lngLat).setHTML(html).addTo(map);
+        return popupRef.current;
+      },
+      onStatus: status => onTransitStatusRef.current?.(status),
+      clickableLayers: CLICKABLE_LAYERS,
+    });
+    return () => {
+      detach();
+      onTransitStatusRef.current?.(null);
+    };
+  }, [mapReady, activeLayers.transit]);
+
+  // ── MAP CENTER REPORTING ──
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const map = mapRef.current;
+
+    const reportCenter = () => {
+      const c = map.getCenter();
+      const b = map.getBounds();
+      onMapCenter?.({
+        lat: c.lat,
+        lng: c.lng,
+        bounds: b ? { west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() } : undefined,
+      });
+    };
+
+    // Fire immediately so panels get initial coordinates
+    reportCenter();
+
+    map.on('moveend', reportCenter);
+    return () => { map.off('moveend', reportCenter); };
+  }, [mapReady, onMapCenter]);
+
+  // Escape clears the selection, the way it cancels a draw — an overlay that
+  // can only be dismissed by hitting a 14px target is one that stays open.
+  useEffect(() => {
+    if (!selectedSat) return;
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') clearSat(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedSat, clearSat]);
+
+  // Zooming past the ceiling takes the satellites off the map, so a readout
+  // left over from before the zoom would be describing something no longer
+  // there — and its ring and orbit are already gone.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || !selectedSat) return;
+    const onZoom = () => { if (map.getZoom() > SAT_MAX_ZOOM) clearSat(); };
+    onZoom();
+    map.on('zoomend', onZoom);
+    return () => { map.off('zoomend', onZoom); };
+  }, [mapReady, selectedSat, clearSat]);
 
   return (
     <>
       <div ref={containerRef} className="absolute inset-0 w-full h-full" />
-
-      {/* ── Live orbit speed control — only while a satellite layer is on ── */}
-      {satActive && (
-        <div
-          className="absolute z-30 pointer-events-auto"
-          style={{
-            left: '50%',
-            transform: 'translateX(-50%)',
-            bottom: 'max(env(safe-area-inset-bottom, 0px), 88px)',
-            width: 'min(340px, calc(100vw - 32px))',
-          }}
-        >
-          <div
-            style={{
-              background: 'rgba(8, 14, 22, 0.82)',
-              backdropFilter: 'blur(18px)',
-              WebkitBackdropFilter: 'blur(18px)',
-              border: `1px solid ${accent}44`,
-              borderRadius: 12,
-              padding: '10px 12px',
-              boxShadow: `0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px ${accent}18`,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button
-                onClick={() => setSatPlaying(p => !p)}
-                aria-label={satPlaying ? 'Pause orbits' : 'Play orbits'}
-                style={{
-                  flex: '0 0 auto', width: 34, height: 34, borderRadius: 8,
-                  border: `1px solid ${accent}66`, background: `${accent}1a`,
-                  color: accent, cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: 14,
-                }}
-              >
-                {satPlaying ? '❚❚' : '▶'}
-              </button>
-
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
-                  <span style={{ fontSize: 9, letterSpacing: '0.14em', color: `${accent}cc`, fontFamily: 'monospace', textTransform: 'uppercase' }}>
-                    Orbit Speed
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: accent, fontFamily: 'monospace' }}>
-                    {speedLabel}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={500}
-                  step={1}
-                  value={satSpeed}
-                  onChange={(e) => setSatSpeed(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: accent, cursor: 'pointer', height: 18 }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-              {[
-                { label: 'Real', v: 1 },
-                { label: '60×', v: 60 },
-                { label: '150×', v: 150 },
-                { label: '500×', v: 500 },
-              ].map(preset => {
-                const on = Math.round(satSpeed) === preset.v;
-                return (
-                  <button
-                    key={preset.v}
-                    onClick={() => setSatSpeed(preset.v)}
-                    style={{
-                      flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 10,
-                      fontFamily: 'monospace', letterSpacing: '0.06em', cursor: 'pointer',
-                      border: `1px solid ${on ? accent : accent + '33'}`,
-                      background: on ? `${accent}22` : 'transparent',
-                      color: on ? accent : `${accent}99`,
-                      fontWeight: on ? 700 : 400,
-                    }}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      {mapReady && mapRef.current && (
+        <CctvPreviews
+          mapRef={mapRef}
+          active={!!activeLayers.cctv && !!activeLayers.cctv_previews}
+          onOpen={(cam: PreviewCamera) => onEntityClick?.({ type: 'cctv', ...cam })}
+        />
+      )}
+      {mapReady && (
+        <LiveNewsPreviews
+          mapRef={mapRef}
+          active={!!activeLayers.live_news}
+          feeds={data.live_feeds}
+          onOpen={(feed: PreviewFeed) => onEntityClick?.({
+            type: 'live_news',
+            name: feed.name,
+            city: feed.city,
+            country: feed.country,
+            url: feed.url,
+            category: feed.category,
+            embed_allowed: true,
+          })}
+        />
+      )}
+      {selectedSat && <SatelliteCard sat={selectedSat} onClose={clearSat} />}
+      {mapReady && <MapControls mapRef={mapRef} onInteract={onFollowInterrupt} />}
+      {mapReady && (activeLayers.wind || activeLayers.rain) && (
+        <div className={DOCK}>
+          {activeLayers.wind && <WindBar mapRef={mapRef} controls={!!activeLayers.wind_controls} particles={!!activeLayers.wind_particles} onOff={() => onLayerOff?.('wind')} />}
+          {activeLayers.rain && <RainBar mapRef={mapRef} mapStyle={mapStyle} controls={!!activeLayers.rain_controls} onOff={() => onLayerOff?.('rain')} />}
         </div>
       )}
     </>

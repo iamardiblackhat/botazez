@@ -10,12 +10,12 @@
   --gold-rgb: 212, 175, 55;
   --cyan-rgb: 0, 229, 255;
   /* ── Core Palette ── */
-  --bg-void: #0A0F1E;
-  --bg-primary: #0E1526;
-  --bg-secondary: #18213B;
-  --bg-tertiary: #212D4C;
-  --bg-panel: rgba(23, 31, 55, 0.84);
-  --bg-panel-solid: #18213B;
+  --bg-void: #04040A;
+  --bg-primary: #06060C;
+  --bg-secondary: #0C0E1A;
+  --bg-tertiary: #121628;
+  --bg-panel: rgba(8, 10, 20, 0.88);
+  --bg-panel-solid: #0C0E1A;
 
   /* ── Gold Accent (Eye of Horus) ── */
   --gold-primary: #D4AF37;
@@ -38,17 +38,36 @@
   --accent-weather: #E040FB;
   --accent-nuclear: #76FF03;
 
+  /* ── Map Layers ──
+     What the map itself draws with. Mirrored in src/lib/map-palette.ts, which
+     reads these back; the two copies are pinned together by its tests. */
+  --map-cctv: #00e676;
+  --map-sat-comms: #00e676;
+  --map-sat-military: #ff3d3d;
+  --map-sat-navigation: #448aff;
+  --map-sat-earth: #90ee90;
+  --map-sat-science: #ffd700;
+  --map-sat-other: #00e5ff;
+  --map-flight-civil: #00e5ff;
+  --map-flight-private: #ffd700;
+  --map-flight-gov: #ff9500;
+  --map-flight-military: #ff0000;
+  --map-flight-unknown: #546e7a;
+  --map-oi-support: #b388ff;
+  --map-oi-oppose: #ff5ccb;
+  --map-oi-neutral: #8c7cff;
+
   /* ── Borders ── */
-  --border-primary: rgba(var(--gold-rgb), 0.20);
-  --border-secondary: rgba(var(--gold-rgb), 0.11);
-  --border-active: rgba(var(--gold-rgb), 0.5);
+  --border-primary: rgba(var(--gold-rgb), 0.15);
+  --border-secondary: rgba(var(--gold-rgb), 0.08);
+  --border-active: rgba(var(--gold-rgb), 0.4);
   --border-cyan: rgba(var(--cyan-rgb), 0.2);
 
   /* ── Text ── */
-  --text-primary: #F3F2EC;
-  --text-secondary: #CAC6BB;
-  --text-muted: #949081;
-  --text-heading: #FCF8EC;
+  --text-primary: #E8E6E0;
+  --text-secondary: #9B978E;
+  --text-muted: #5C5A54;
+  --text-heading: #F5F0E0;
   --text-gold: #D4AF37;
   --text-cyan: #00E5FF;
 
@@ -115,6 +134,15 @@ body.theme-ghost {
   --scrollbar-thumb: rgba(179, 136, 255, 0.25);
   --scrollbar-thumb-hover: rgba(179, 136, 255, 0.5);
   --hover-accent: rgba(179, 136, 255, 0.1);
+
+  /* Phantom pulls the map's own layers into the violet range too. The
+     satellite entries are deliberately left alone: they are the signal that
+     nobody has overridden that category, so the feed's mission colours show. */
+  --map-cctv: #b388ff;
+  --map-flight-civil: #b388ff;
+  --map-flight-private: #ce93d8;
+  --map-flight-gov: #d500f9;
+  --map-flight-unknown: #b388ff;
 }
 
 @theme inline {
@@ -139,6 +167,33 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ── Scrollable document pages (docs) ──
+   The rules above lock the viewport for the fullscreen map. Long-form pages
+   opt out by rendering .docs-root, which releases the lock without affecting
+   the map. */
+html:has(.docs-root),
+html:has(.docs-root) body {
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.docs-root),
+  html:has(.docs-root) body { scroll-behavior: auto; }
+}
+
+/* ── Docs code tokens ── */
+.docs-code { color: #C9D1D9; }
+.docs-code .tok-key { color: var(--gold-primary); }
+.docs-code .tok-str { color: #A5D6A7; }
+.docs-code .tok-num { color: #F0D060; }
+.docs-code .tok-lit { color: #B388FF; }
+.docs-code .tok-kw  { color: #FF7B9C; }
+.docs-code .tok-fn  { color: var(--cyan-primary); }
+.docs-code .tok-com { color: #5C5A54; font-style: italic; }
+
 /* ── Scrollbar ── */
 .styled-scrollbar::-webkit-scrollbar { width: 3px; }
 .styled-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -157,13 +212,13 @@ html, body {
   border-radius: 14px;
   box-shadow:
     0 4px 30px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(var(--gold-rgb), 0.10) inset,
+    0 1px 0 rgba(var(--gold-rgb), 0.06) inset,
     0 -1px 0 rgba(0, 0, 0, 0.3) inset;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-panel:hover {
-  border-color: rgba(var(--gold-rgb), 0.30);
+  border-color: rgba(var(--gold-rgb), 0.22);
 }
 
 .glass-panel-sm {
@@ -199,7 +254,7 @@ html, body {
 
 .hud-label {
   font-family: var(--font-hud);
-  font-size: 9px;
+  font-size: 7px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -207,7 +262,7 @@ html, body {
 
 .hud-value {
   font-family: var(--font-hud);
-  font-size: 12.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--gold-primary);
   font-variant-numeric: tabular-nums;
@@ -356,7 +411,7 @@ html, body {
 .mobile-nav-btn {
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 5px 6px; border-radius: 8px;
-  font-family: var(--font-hud); font-size: 8px; letter-spacing: 0.08em;
+  font-family: var(--font-hud); font-size: 6px; letter-spacing: 0.08em;
   color: var(--text-muted); background: transparent;
   border: none; cursor: pointer; transition: all 0.2s ease;
   text-transform: uppercase;
@@ -503,7 +558,7 @@ html, body {
   border-radius: 14px;
   box-shadow:
     0 4px 30px rgba(0, 0, 0, 0.5),
-    0 1px 0 rgba(var(--gold-rgb), 0.10) inset,
+    0 1px 0 rgba(var(--gold-rgb), 0.06) inset,
     0 -1px 0 rgba(0, 0, 0, 0.3) inset;
   transition:
     transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -572,6 +627,66 @@ html, body {
 .pulse-ring--alert::before,
 .pulse-ring--alert::after {
   border-color: var(--alert-red);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CCTV MAP PREVIEWS
+   The live frames pinned to camera markers past zoom 13.
+   ───────────────────────────────────────────────────────────── */
+.cctv-tile {
+  transform-origin: 50% 100%;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), filter 0.18s ease;
+}
+.cctv-tile:hover,
+.cctv-tile:focus-visible {
+  /* Lifting rather than scaling: a scaled tile resamples the frame inside it,
+     and at this size that reads as the camera going soft. */
+  transform: translateY(-3px);
+  filter: brightness(1.12) drop-shadow(0 0 10px color-mix(in srgb, var(--map-cctv) 30%, transparent));
+}
+
+/* `place()` writes data-flip on the wrapper once it knows whether the tile
+   had room above its marker. Only the stem on the marker's side is drawn. */
+[data-flip="above"] .cctv-stem-up,
+[data-flip="below"] .cctv-stem-down,
+[data-flip="none"] .cctv-stem { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cctv-tile { transition: none; }
+  .cctv-tile:hover, .cctv-tile:focus-visible { transform: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LIVE TV NEWS PREVIEWS
+   The same tile as the CCTV previews, but pinned to broadcast
+   feeds and drawn at every zoom — see components/LiveNewsPreviews.
+   ───────────────────────────────────────────────────────────── */
+.news-tile {
+  transform-origin: 50% 100%;
+  transition: filter 0.18s ease;
+}
+.news-tile:hover {
+  filter: brightness(1.1) drop-shadow(0 0 12px color-mix(in srgb, #EC407A 32%, transparent));
+}
+
+[data-flip="above"] .news-stem-up,
+[data-flip="below"] .news-stem-down,
+[data-flip="none"] .news-stem { display: none; }
+
+/* The on-air dot, blinking like the malware arrival beacon so that "live"
+   reads the same way wherever it appears on the map. */
+.news-live-dot {
+  animation: news-live-blink 1.6s ease-in-out infinite;
+}
+@keyframes news-live-blink {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 6px #EC407A; }
+  50%      { opacity: 0.3; box-shadow: 0 0 2px #EC407A; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-tile { transition: none; }
+  .news-tile:hover { filter: none; }
+  .news-live-dot { animation: none; }
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -2248,45 +2363,279 @@ html, body {
   }
 }
 
+/* ── Range slider (World Remote) ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  border: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold-primary);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(212,175,55,0.4);
+  border: 2px solid rgba(0,0,0,0.3);
+  transition: box-shadow 0.15s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 14px rgba(212,175,55,0.6);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--gold-primary);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(212,175,55,0.4);
+  border: 2px solid rgba(0,0,0,0.3);
+}
 
 /* ═══════════════════════════════════════════════════════════════
-   BOTAZEZ — VISUAL REFINEMENTS (contrast, active states, micro-motion)
-   Additive polish only — no layout, structure, or behavior changes.
+   INSTRUMENT PANEL
+   Shared chrome for the tool panels — route planner, markets, and
+   anything else that should read as an instrument rather than a form.
+   Kept here rather than in each component so the panels cannot drift
+   apart, which is what makes a set of tools feel assembled instead of
+   designed.
    ═══════════════════════════════════════════════════════════════ */
 
-/* Interactive glass chips/buttons — gentle lift + glow on hover */
-button.glass-panel,
-a.glass-panel {
-  transition: border-color 0.25s ease, box-shadow 0.25s ease,
-              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease;
-}
-button.glass-panel:hover,
-a.glass-panel:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 6px 24px rgba(0, 0, 0, 0.5),
-    0 0 18px rgba(var(--gold-rgb), 0.14);
-}
-button.glass-panel:active,
-a.glass-panel:active { transform: translateY(0); }
-
-/* Keyboard accessibility — clear focus ring that matches the palette */
-:where(button, a, [role="button"], input, select, textarea):focus-visible {
-  outline: 1px solid rgba(var(--gold-rgb), 0.65);
-  outline-offset: 2px;
-}
-
-/* Stronger, clearer active toggle state */
-.layer-toggle.active {
-  box-shadow: 0 0 0 1px rgba(var(--gold-rgb), 0.35), 0 0 10px rgba(var(--gold-rgb), 0.25);
+/* Faint engineering grid. Sits under the content at very low contrast —
+   readable as texture, never as lines competing with the data. */
+/* Deliberately does NOT set `position`. These rules are appended after the
+   Tailwind utilities, so a `position: relative` here would beat a `fixed`
+   utility on the same element at equal specificity — which is exactly how the
+   markets panel stopped going fullscreen. The consumer owns positioning; this
+   only needs *some* positioned ancestor, which every panel already has. */
+.instrument-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(var(--gold-rgb), 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--gold-rgb), 0.045) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 65%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 65%);
+  border-radius: inherit;
 }
 
-/* Premium depth for the primary glass surfaces */
-.osiris-glow {
-  box-shadow:
-    0 0 24px rgba(var(--gold-rgb), 0.14),
-    0 0 70px rgba(var(--gold-rgb), 0.06),
-    0 8px 40px rgba(0, 0, 0, 0.55);
+/* Corner brackets. Four hairlines that frame a panel the way a sight or a
+   viewfinder does, without the cost of a full border. */
+.instrument-corners::after,
+.instrument-corners::before {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border-color: rgba(var(--gold-rgb), 0.45);
+}
+.instrument-corners::before {
+  top: 6px;
+  left: 6px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+}
+.instrument-corners::after {
+  bottom: 6px;
+  right: 6px;
+  border-bottom: 1px solid;
+  border-right: 1px solid;
+}
+
+/* Header treatment: an accent bar and a hairline rule that reads as a
+   masthead rather than a title. */
+.instrument-title {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-heading);
+}
+
+.instrument-rule {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--gold-rgb), 0.35) 0%,
+    rgba(var(--gold-rgb), 0.10) 40%,
+    transparent 100%
+  );
+}
+
+/* Small state chip — STANDBY / READY / LIVE. */
+.instrument-chip {
+  font-family: var(--font-hud);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+/* Monospace sample of an accepted input format, for empty states that would
+   otherwise just say "type something". */
+.instrument-sample {
+  font-family: var(--font-hud);
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: rgba(var(--gold-rgb), 0.06);
+  border: 1px solid rgba(var(--gold-rgb), 0.12);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* OI's theatre takes the whole screen: the app's own HUD steps back until it closes. */
+html[data-oi-theater] [data-hud],
+html[data-oi-theater] [data-map-controls] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.3s ease;
+}
+
+/* ── OSIRIS OI: gold and black ──
+   The OI panel and workspace keep to two tones: gold leads (what is selected,
+   what is live, the prediction), champagne is its quiet second where the
+   platform would use cyan, and the surfaces are black rather than navy. In
+   Ghost they follow that theme's violets. The map and the arcs keep their own
+   colours (the arcs' are set in the Style Studio). Search and Directions
+   (.tool-*) share the same black surface and gold button. */
+:root {
+  --oi-alt: #E6D3A3;
+  --oi-alt-rgb: 230, 211, 163;
+  --oi-surface: rgba(9, 9, 9, 0.9);
+  --oi-solid: #0B0B0B;
+  --oi-raised: #141414;
+  --oi-label: #8C877C;
+  --tool-surface: rgba(10, 10, 10, 0.96);
+}
+body.theme-ghost {
+  --oi-alt: var(--cyan-primary);
+  --oi-alt-rgb: var(--cyan-rgb);
+  --oi-surface: var(--bg-panel);
+  --oi-solid: var(--bg-panel-solid);
+  --oi-raised: var(--bg-tertiary);
+  --oi-label: var(--text-secondary);
+  --tool-surface: var(--bg-panel-solid);
+}
+.oi-glass, .tool-glass {
+  background: var(--oi-surface);
+  border-color: rgba(var(--gold-rgb), 0.13);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(var(--gold-rgb), 0.07) inset;
+}
+.oi-glass:hover, .tool-glass:hover { border-color: rgba(var(--gold-rgb), 0.2); }
+/* The one filled button OI has: the action a view exists for. */
+.oi-btn-primary, .tool-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 8px;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #0B0B0B;
+  background: linear-gradient(180deg, var(--gold-light), var(--gold-primary));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 18px rgba(var(--gold-rgb), 0.18);
+  transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease;
+}
+.oi-btn-primary:hover, .tool-btn-primary:hover { filter: brightness(1.06); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 8px 24px rgba(var(--gold-rgb), 0.28); }
+.oi-btn-primary:active, .tool-btn-primary:active { transform: scale(0.985); }
+.oi-btn-primary:focus-visible, .tool-btn-primary:focus-visible { outline: 2px solid rgba(var(--gold-rgb), 0.6); outline-offset: 2px; }
+.oi-btn-primary:disabled, .tool-btn-primary:disabled { color: rgba(var(--gold-rgb), 0.55); background: rgba(var(--gold-rgb), 0.08); box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), 0.2); filter: none; cursor: default; }
+/* The quiet button beside it: a gold outline. */
+.oi-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-family: var(--font-hud);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-light);
+  border: 1px solid rgba(var(--gold-rgb), 0.35);
+  background: rgba(var(--gold-rgb), 0.06);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.oi-btn:hover { background: rgba(var(--gold-rgb), 0.12); border-color: rgba(var(--gold-rgb), 0.55); }
+.oi-btn:focus-visible { outline: 2px solid rgba(var(--gold-rgb), 0.5); outline-offset: 2px; }
+.oi-btn:disabled { opacity: 0.4; pointer-events: none; }
+.oi-select option { background: var(--oi-solid); }
+/* Search and Directions sit over the busiest part of the map: nearly solid, so labels underneath never read through. */
+.tool-glass { background: var(--tool-surface); }
+/* Search: a line of gold runs under the box while a search is on its way. */
+@keyframes tool-scan { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.tool-scan { background: linear-gradient(90deg, transparent, var(--gold-primary), transparent); animation: tool-scan 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tool-scan { animation: none; opacity: 0.6; } }
+
+/* OI's research graph: marks fade in as the run finds them, an actor deciding its move pings.
+   Fading stroke-opacity leaves opacity to the dimming. */
+@keyframes oi-graph-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes oi-edge-in { from { stroke-opacity: 0; } to { stroke-opacity: 1; } }
+@keyframes oi-graph-ping { from { transform: scale(0.75); opacity: 0.9; } to { transform: scale(1.6); opacity: 0; } }
+g.oi-graph-in { animation: oi-graph-in 0.7s ease-out both; }
+path.oi-graph-in { animation: oi-edge-in 0.9s ease-out both; }
+.oi-graph-ping { transform-box: fill-box; transform-origin: center; animation: oi-graph-ping 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .oi-graph-ping { animation: none; }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CCTV VISION — AI Analyze on a camera (components/CameraVision)
+   The frame freezes under a scanning grid while the detector
+   reads it; then a sweep crosses it, lifting the veil, and each
+   box locks on as the line passes (its delay is --at).
+   ───────────────────────────────────────────────────────────── */
+.vision-sweep { transform-box: view-box; animation: vision-sweep var(--sweep, 1100ms) linear both; }
+.vision-sweep-loop { transform-box: view-box; animation: vision-sweep 1.6s linear infinite; }
+@keyframes vision-sweep {
+  from { transform: translateY(0); }
+  to   { transform: translateY(120%); }
+}
+.vision-lock { transform-box: fill-box; transform-origin: center; animation: vision-lock 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15) var(--at, 0ms) both; }
+@keyframes vision-lock {
+  from { opacity: 0; transform: scale(1.6); }
+  50%  { opacity: 1; }
+  to   { opacity: 1; transform: scale(1); }
+}
+.vision-flash { animation: vision-flash 0.7s ease-out var(--at, 0ms) both; }
+@keyframes vision-flash {
+  from { opacity: 0; }
+  20%  { opacity: 0.4; }
+  to   { opacity: 0; }
+}
+.vision-chip { animation: vision-fade 0.4s ease-out calc(var(--at, 0ms) + 300ms) both; }
+@keyframes vision-fade { from { opacity: 0; } }
+.vision-region { transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.vision-acquire { animation: vision-acquire 1.4s linear infinite; }
+@keyframes vision-acquire {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(500%); }
+}
+.vision-grow { transform-origin: left; animation: vision-grow var(--sweep, 1100ms) cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes vision-grow { from { transform: scaleX(0); } }
+.vision-rise { animation: vision-rise 0.45s ease-out both; }
+@keyframes vision-rise { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .vision-sweep, .vision-sweep-loop, .vision-acquire { display: none; }
+  .vision-lock, .vision-flash, .vision-chip, .vision-grow, .vision-rise { animation: none; }
+  .vision-region { transition: none; }
 }
 
 /* ARDI panel launcher — brand-accent micro-interaction */
@@ -2298,13 +2647,3 @@ a.glass-panel:active { transform: translateY(0); }
   border-color: rgba(20, 241, 149, 0.32) !important;
   background: rgba(20, 241, 149, 0.05) !important;
 }
-
-/* Sharper HUD values for at-a-glance reading */
-.hud-value { text-shadow: 0 0 10px rgba(var(--gold-rgb), 0.18); }
-
-/* Honor reduced-motion preferences */
-@media (prefers-reduced-motion: reduce) {
-  button.glass-panel:hover,
-  a.glass-panel:hover { transform: none; }
-}
-

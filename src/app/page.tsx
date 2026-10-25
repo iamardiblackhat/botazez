@@ -17,6 +17,8 @@ import KeyboardShortcuts from '@/components/KeyboardShortcuts';
 import GlobalStatusBar from '@/components/GlobalStatusBar';
 import DashboardRow from '@/components/DashboardRow';
 import LiveAlerts from '@/components/LiveAlerts';
+import { type TerrainStatus } from '@/lib/map-terrain';
+import { type TransitStatus } from '@/lib/transit-layer';
 
 const OsirisMap = dynamic(() => import('@/components/OsirisMap'), { ssr: false });
 const SpaceCanvas = dynamic(() => import('@/components/SpaceCanvas'), { ssr: false });
@@ -102,7 +104,10 @@ export default function Dashboard() {
   const [locationLabel, setLocationLabel] = useState('');
   const [regionDossier, setRegionDossier] = useState<any>(null);
   const [dossierLoading, setDossierLoading] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('nosplash')) return false;
+    return true;
+  });
   const [activeCamera, setActiveCamera] = useState<any>(null);
   const [spaceWeather, setSpaceWeather] = useState<any>(null);
   const [showLayers, setShowLayers] = useState(true);
@@ -116,6 +121,8 @@ export default function Dashboard() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|null>(null);
   const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('globe');
+  const [terrainStatus, setTerrainStatus] = useState<TerrainStatus>('idle');
+  const [transitStatus, setTransitStatus] = useState<TransitStatus | null>(null);
   const [solarSystemActive, setSolarSystemActive] = useState(false); // click-to-focus solar system explorer, see SolarSystemView.tsx
   const [oceanViewActive, setOceanViewActive] = useState(false); // live animated ocean, triggered from a maritime chokepoint/port click, see OceanView.tsx
   const [oceanOrigin, setOceanOrigin] = useState<string | undefined>(undefined);
@@ -158,6 +165,7 @@ export default function Dashboard() {
     jets: false,
     military: false,
     maritime: true,
+    transit: false,
     satellites: true,
     sat_comms: false,
     sat_military: false,
@@ -166,6 +174,7 @@ export default function Dashboard() {
     sat_science: false,
     balloons: false,
     cctv: true,
+    cctv_previews: true,
     live_news: true,
     news_intel: true,
     earthquakes: true,
@@ -174,6 +183,7 @@ export default function Dashboard() {
     radiation: false,
     infrastructure: false,
     global_incidents: true,
+    alert_pins: false,
     war_alerts: false,
     gps_jamming: false,
     day_night: true,
@@ -181,8 +191,19 @@ export default function Dashboard() {
     sdk_sea: true,
     sdk_air: true,
     sdk_naval: true,
-    terrain_3d: false,
+    live_clouds: true,
+    wind: false,
+    rain: false,
+    wind_controls: true,
+    rain_controls: true,
+    wind_particles: false,
+    terrain_3d: true,
+    terrain_elevation: true,
     malware: true,
+    cyber_attacks: true,
+    gdelt_events: false,
+    cf_outages: false,
+    cf_attacks: false,
   });
   const [liveFeedUrl, setLiveFeedUrl] = useState<string | null>(null);
   const [liveFeedName, setLiveFeedName] = useState('');
@@ -737,6 +758,10 @@ export default function Dashboard() {
           data={data} 
           activeLayers={activeLayers} 
           projection={mapProjection} 
+          terrainEnabled={activeLayers.terrain_elevation && mapProjection === 'globe'}
+          onTerrainStatusChange={setTerrainStatus}
+          onLayerOff={key => setActiveLayers(prev => ({ ...prev, [key]: false }))}
+          onTransitStatus={setTransitStatus}
           mapStyle={mapStyle === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : 'dark'} 
           onEntityClick={handleEntityClick} 
           onMouseCoords={handleMouseCoords} 

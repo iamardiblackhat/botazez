@@ -60,3 +60,4 @@ _to_delete/
 .vercel-config/
 
 .env*
+.cache

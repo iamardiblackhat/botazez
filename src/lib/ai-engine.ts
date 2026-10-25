@@ -1,11 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════════
  *  OSIRIS — AI Intelligence Engine
- *  Groq LLaMA integration for real-time intelligence analysis
+ *  Gemini 2.0 Flash integration for real-time intelligence analysis
  *  Designed to correlate multi-domain feeds into actionable briefings
  * ═══════════════════════════════════════════════════════════════
  */
 
+import { GoogleGenerativeAI, type GenerativeModel } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 
 /* ─────────────────────────────────────────────────────────────
@@ -33,8 +34,14 @@ export interface NewsItem {
   published: string;
   source: string;
   risk_score: number;
+  /** How `risk_score` was derived, and the terms that produced it. */
+  risk_method?: string;
+  risk_keywords?: string[];
   coords: [number, number] | null;
-  machine_assessment: string | null;
+  /** 'country-anchor' when `coords` is a preset centroid, not an event fix. */
+  location_precision?: 'country-anchor' | null;
+  coords_anchor?: string | null;
+  keyword_assessment: string | null;
 }
 
 export interface ThreatEvent {
@@ -143,6 +150,10 @@ Analyze the provided data thoroughly. Be specific — reference actual events, m
    Client Factory
    ───────────────────────────────────────────────────────────── */
 
+export function createGeminiClient(apiKey: string): GoogleGenerativeAI {
+  return new GoogleGenerativeAI(apiKey);
+}
+
 export function createGroqClient(apiKey: string): Groq {
   return new Groq({ apiKey });
 }
@@ -218,10 +229,15 @@ function serializeContext(context: IntelligenceContext): string {
    ───────────────────────────────────────────────────────────── */
 
 export async function analyzeIntelligence(
-  client: Groq,
+  client: GoogleGenerativeAI,
   context: IntelligenceContext,
   userQuery: string
 ): Promise<string> {
+  const model: GenerativeModel = client.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    systemInstruction: SYSTEM_PROMPT,
+  });
+
   const contextData = serializeContext(context);
 
   const prompt = `## CURRENT OPERATIONAL DATA
@@ -232,18 +248,9 @@ ${userQuery}
 
 Provide your intelligence assessment based on the operational data above and the analyst's query.`;
 
-  const result = await client.chat.completions.create({
-    model: 'mixtral-8x7b-32768',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 2048,
-  });
-
-  const message = result.choices[0]?.message;
-  return message?.content || '';
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  return response.text();
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -251,9 +258,14 @@ Provide your intelligence assessment based on the operational data above and the
    ───────────────────────────────────────────────────────────── */
 
 export async function generateBriefing(
-  client: Groq,
+  client: GoogleGenerativeAI,
   context: IntelligenceContext
 ): Promise<string> {
+  const model: GenerativeModel = client.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    systemInstruction: SYSTEM_PROMPT,
+  });
+
   const contextData = serializeContext(context);
 
   const prompt = `${BRIEFING_PROMPT}
@@ -263,16 +275,7 @@ ${contextData}
 
 Generate the briefing now.`;
 
-  const result = await client.chat.completions.create({
-    model: 'mixtral-8x7b-32768',
-    messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 3000,
-  });
-
-  const message = result.choices[0]?.message;
-  return message?.content || '';
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  return response.text();
 }
