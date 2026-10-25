@@ -397,9 +397,9 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
     // so machines that only ever managed WebGL1 are now out of reach either way.
     // Dropping antialias is the last rung left for a struggling GPU.
     const attributeFallbacks: maplibregl.MapOptions['canvasContextAttributes'][] = [
-      { preserveDrawingBuffer: true },
-      { preserveDrawingBuffer: true, powerPreference: 'low-power', failIfMajorPerformanceCaveat: false },
-      { preserveDrawingBuffer: true, powerPreference: 'low-power', failIfMajorPerformanceCaveat: false, antialias: false },
+      undefined,
+      { powerPreference: 'low-power', failIfMajorPerformanceCaveat: false },
+      { powerPreference: 'low-power', failIfMajorPerformanceCaveat: false, antialias: false },
     ];
 
     let map: maplibregl.Map | undefined;
@@ -951,7 +951,7 @@ function OsirisMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCl
       map.once('idle', () => onReadyRef.current?.());
       // Dev-only handle. The map is otherwise unreachable from the console,
       // which makes interaction bugs guesswork rather than diagnosis.
-      (window as any).__osirisMap = map;
+      if (process.env.NODE_ENV === 'development') (window as any).__osirisMap = map;
     });
 
     // Events
