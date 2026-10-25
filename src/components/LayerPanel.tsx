@@ -112,6 +112,7 @@ function ToggleSwitch({ active, onClick }: { active: boolean; onClick: () => voi
   return (
     <button
       onClick={onClick}
+      aria-label={active ? "Disable layer" : "Enable layer"}
       className="relative flex-shrink-0 cursor-pointer"
       style={{ width: 28, height: 14 }}
     >
@@ -199,6 +200,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
             <span className="text-[12px] font-mono tracking-[0.2em] text-white/25 uppercase">Ghost Protocol</span>
             <button
               onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
+              aria-label="Toggle Ghost protocol theme"
               className="w-8 h-8 rounded-full flex items-center justify-center transition-all"
               style={{
                 background: theme === 'ghost' ? 'rgba(179, 136, 255, 0.15)' : 'transparent',
@@ -336,6 +338,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
       {setTheme && (
         <button
           onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
+          aria-label="Toggle Ghost protocol theme"
           className="w-[60px] py-1.5 flex flex-col items-center justify-center gap-1 rounded-lg transition-all duration-500 cursor-pointer"
           style={{
             background: theme === 'ghost' ? 'rgba(179, 136, 255, 0.1)' : 'transparent',

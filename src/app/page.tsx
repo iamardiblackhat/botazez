@@ -787,6 +787,7 @@ export default function Dashboard() {
           onClick={() => setMapProjection(p => p === 'globe' ? 'mercator' : 'globe')}
           className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
           title={mapProjection === 'globe' ? 'Switch to 2D Map' : 'Switch to 3D Globe'}
+          aria-label={mapProjection === 'globe' ? 'Switch to 2D Map' : 'Switch to 3D Globe'}
         >
           {mapProjection === 'globe' ? (
             <MapPinned className="w-5 h-5 text-[var(--gold-primary)] group-hover:scale-110 transition-transform" />
@@ -803,6 +804,7 @@ export default function Dashboard() {
           onClick={() => setMapStyle(s => s === 'dark' ? 'satellite' : 'dark')}
           className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
           title={mapStyle === 'dark' ? 'Satellite View' : 'Night View'}
+          aria-label={mapStyle === 'dark' ? 'Switch to Satellite View' : 'Switch to Night View'}
         >
           {mapStyle === 'dark' ? (
             <Satellite className="w-5 h-5 text-[var(--alert-green)] group-hover:scale-110 transition-transform" />
@@ -819,6 +821,7 @@ export default function Dashboard() {
           onClick={() => setSolarSystemActive(true)}
           className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
           title="Solar System View"
+          aria-label="Open Solar System View"
         >
           <Orbit className="w-5 h-5 text-[var(--cyan-primary)] group-hover:scale-110 transition-transform" />
           <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[12px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
@@ -832,6 +835,7 @@ export default function Dashboard() {
           onClick={() => setShowLegend(v => !v)}
           className={`glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative ${showLegend ? 'border-[var(--gold-primary)]/40' : ''}`}
           title="Map Legend"
+          aria-label="Toggle Map Legend"
         >
           <Info className={`w-5 h-5 group-hover:scale-110 transition-transform ${showLegend ? 'text-[var(--gold-primary)]' : 'text-[var(--cyan-primary)]'}`} />
           <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[12px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
@@ -911,7 +915,7 @@ export default function Dashboard() {
       {/* Labels are always visible (not hover-only) so this strip isn't a mystery row of icons */}
       {!isMobile && <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1 z-[250] pointer-events-auto bg-black/40 backdrop-blur-sm p-1.5 rounded-xl border border-white/5">
         <div className="relative group">
-          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} title="OSINT / Recon" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button onClick={() => { setShowIntel(!showIntel); setShowMarkets(false); setShowAlerts(false); }} title="OSINT / Recon" aria-label="Open Intel feed" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showIntel ? 'bg-[var(--cyan-primary)]/20' : 'hover:bg-white/10'}`}>
             <Radar className={`w-4 h-4 shrink-0 ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/60'}`} />
             <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showIntel ? 'text-[var(--cyan-primary)]' : 'text-white/50'}`}>Intel</span>
           </button>
@@ -932,7 +936,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} title="Markets" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button onClick={() => { setShowMarkets(!showMarkets); setShowIntel(false); setShowAlerts(false); }} title="Markets" aria-label="Open Markets panel" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showMarkets ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
             <BarChart3 className={`w-4 h-4 shrink-0 ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showMarkets ? 'text-[var(--gold-primary)]' : 'text-white/50'}`}>Markets</span>
           </button>
@@ -947,7 +951,7 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); setShowEntityGraph(false); }} title="Alerts" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
+          <button onClick={() => { setShowAlerts(!showAlerts); setShowIntel(false); setShowMarkets(false); setShowEntityGraph(false); }} title="Alerts" aria-label="Open Alerts panel" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showAlerts ? 'bg-[#FF3D3D]/20' : 'hover:bg-white/10'}`}>
             <AlertTriangle className={`w-4 h-4 shrink-0 ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/60'}`} />
             <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showAlerts ? 'text-[#FF3D3D]' : 'text-white/50'}`}>Alerts</span>
           </button>
@@ -962,14 +966,14 @@ export default function Dashboard() {
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowEntityGraph(!showEntityGraph); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); }} title="Entity Graph" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showEntityGraph ? 'bg-[#D4AF37]/20' : 'hover:bg-white/10'}`}>
+          <button onClick={() => { setShowEntityGraph(!showEntityGraph); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); }} title="Entity Graph" aria-label="Open Entity graph" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showEntityGraph ? 'bg-[#D4AF37]/20' : 'hover:bg-white/10'}`}>
             <Network className={`w-4 h-4 shrink-0 ${showEntityGraph ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showEntityGraph ? 'text-[var(--gold-primary)]' : 'text-white/50'}`}>Graph</span>
           </button>
         </div>
 
         <div className="relative group">
-          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowEntityGraph(false); }} title="Search" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
+          <button onClick={() => { setShowDesktopSearch(!showDesktopSearch); setShowIntel(false); setShowMarkets(false); setShowAlerts(false); setShowEntityGraph(false); }} title="Search" aria-label="Open Search panel" className={`w-24 flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${showDesktopSearch ? 'bg-[var(--gold-primary)]/20' : 'hover:bg-white/10'}`}>
             <Search className={`w-4 h-4 shrink-0 ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/60'}`} />
             <span className={`text-[9px] font-mono tracking-wide uppercase whitespace-nowrap ${showDesktopSearch ? 'text-[var(--gold-primary)]' : 'text-white/50'}`}>Search</span>
           </button>
@@ -1111,7 +1115,7 @@ export default function Dashboard() {
                     <span className="hud-text text-[12px] text-[var(--text-primary)]">
                       {mobilePanel === 'layers' ? 'LAYERS & STATS' : mobilePanel === 'markets' ? 'MARKETS & INTEL' : mobilePanel === 'intel' ? 'INTEL FEED' : mobilePanel === 'recon' ? 'BOTAZEZ RECON' : 'SEARCH'}
                     </span>
-                    <button onClick={() => setMobilePanel(null)} className="text-[var(--text-muted)] p-1"><X className="w-4 h-4" /></button>
+                    <button onClick={() => setMobilePanel(null)} aria-label="Close panel" className="text-[var(--text-muted)] p-1"><X className="w-4 h-4" /></button>
                   </div>
                   {mobilePanel === 'layers' && (
                     <>

@@ -17,7 +17,7 @@ function CardShell({ icon: Icon, title, count, accent, children }: any) {
     <div className="flex flex-col flex-1 min-w-[220px] h-full shrink-0 pointer-events-auto overflow-hidden border-r border-[var(--border-secondary)] last:border-r-0 bg-[#0a0a09]">
       <div className="flex items-center gap-2 px-3 py-2 border-b-2 shrink-0" style={{ borderColor: `${accent}55`, background: 'rgba(0,0,0,0.4)' }}>
         <Icon className="w-3.5 h-3.5" style={{ color: accent }} />
-        <span className="hud-text text-[11px] text-[var(--text-primary)] tracking-wider">{title}</span>
+        <h2 className="hud-text text-[11px] text-[var(--text-primary)] tracking-wider font-normal inline m-0 p-0">{title}</h2>
         {count !== undefined && (
           <span className="gotham-tag gotham-tag--info ml-auto" style={{ fontSize: '10px', padding: '1px 5px' }}>{count}</span>
         )}
@@ -64,7 +64,7 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
                 </button>
               )}
             </div>
-            <h4 className="text-[10.5px] text-[var(--text-primary)] leading-tight line-clamp-2">{item.title}</h4>
+            <h3 className="text-[10.5px] text-[var(--text-primary)] leading-tight line-clamp-2 font-normal m-0 p-0">{item.title}</h3>
           </div>
         ))}
       </CardShell>

@@ -50,7 +50,7 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
       {/* ── Launcher chip (replaces donation chip) ── */}
       <button
         onClick={() => setIsOpen(true)}
-        aria-label="Open ARDI platform showcase"
+        aria-label={compact ? "ARDI" : "ARDI PLATFORM"}
         className={`ardi-chip pointer-events-auto glass-panel flex items-center font-mono tracking-widest transition-all hover:opacity-95 ${compact ? 'gap-1.5 px-3 py-2 text-[15px]' : 'gap-2 px-5 py-2.5 text-[18px] ml-4'}`}
         style={{
           borderColor: 'rgba(20,241,149,0.65)',
