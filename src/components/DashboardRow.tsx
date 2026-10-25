@@ -49,8 +49,8 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
 
   return (
     <div
-      className="absolute bottom-[22px] left-[68px] right-0 z-[195] pointer-events-auto flex h-[210px] border-t-2 border-[var(--border-primary)] overflow-x-auto"
-      style={{ background: '#0a0a09', boxShadow: '0 -8px 30px rgba(0,0,0,0.6)' }}
+      className="absolute bottom-[22px] left-[68px] right-0 z-[195] pointer-events-auto flex h-[210px] border-t-2 border-[var(--border-primary)] overflow-x-auto scroll-smooth styled-scrollbar touch-pan-x"
+      style={{ background: '#0a0a09', boxShadow: '0 -8px 30px rgba(0,0,0,0.6)', WebkitOverflowScrolling: 'touch' }}
     >
       {/* LIVE NEWS */}
       <CardShell icon={Newspaper} title="LIVE NEWS" count={news.length} accent="#D4AF37">

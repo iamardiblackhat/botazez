@@ -245,6 +245,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                   sidebar is self-explanatory without requiring a hover.
                   The full name + sub-options still appear in the flyout. */}
               <div
+                onClick={() => setHoveredGroup(isHovered ? null : group.label)}
                 className="w-[60px] py-1.5 flex flex-col items-center justify-center gap-1 cursor-pointer rounded-lg transition-all duration-300"
                 style={{
                   background: isHovered ? 'rgba(255,255,255,0.05)' : 'transparent',
