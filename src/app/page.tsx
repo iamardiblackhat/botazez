@@ -151,14 +151,14 @@ export default function Dashboard() {
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastGeocodedPos = useRef<{ lat: number; lng: number } | null>(null);
 
-  // ── DEFAULT: Most layers OFF — fast initial load ──
+  // ── DEFAULT: Core intelligence feeds active for full situational awareness ──
   const [activeLayers, setActiveLayers] = useState({
-    flights: false,
+    flights: true,
     private: false,
     jets: false,
     military: false,
     maritime: true,
-    satellites: false,
+    satellites: true,
     sat_comms: false,
     sat_military: false,
     sat_navigation: false,
@@ -182,7 +182,7 @@ export default function Dashboard() {
     sdk_air: true,
     sdk_naval: true,
     terrain_3d: false,
-    malware: false,
+    malware: true,
   });
   const [liveFeedUrl, setLiveFeedUrl] = useState<string | null>(null);
   const [liveFeedName, setLiveFeedName] = useState('');
@@ -210,20 +210,7 @@ export default function Dashboard() {
       });
     }
 
-    // Delay geolocation until map is ready (after splash screen clears)
-    const geoTimer = setTimeout(() => {
-      fetch('/api/geo')
-        .then(r => r.json())
-        .then(geo => {
-          if (geo.status === 'success' && geo.lat && geo.lon) {
-            setFlyToLocation({ lat: geo.lat, lng: geo.lon, ts: Date.now() });
-            setMapView(v => ({ ...v, zoom: 12 }));
-          }
-        })
-        .catch(() => { /* silent — keep default global view */ });
-    }, 3000);
-
-    return () => clearTimeout(geoTimer);
+    // Keep global situational view on initial mount — no disruptive auto-zoom to street level
   }, []);
 
   // URL state: persist active layers only (lat/lon comes from IP geolocation on each load)
