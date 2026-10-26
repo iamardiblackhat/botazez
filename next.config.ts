@@ -6,9 +6,6 @@ const nextConfig: NextConfig = {
   ...(process.env.BUILD_STANDALONE === 'true' ? { output: 'standalone' as const } : {}),
   serverExternalPackages: ['ws'],
   transpilePackages: ['react-map-gl', 'mapbox-gl', 'maplibre-gl'],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   // Force the "@/..." path alias to resolve to /src for webpack builds.
   // (tsconfig paths were not being picked up reliably; this guarantees it.)
   webpack: (config) => {

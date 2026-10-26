@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { featureServiceTarget, layerQueryUrl } from './route';
+import { featureServiceTarget, layerQueryUrl } from './handler';
 
 /*
  * `service` used to reach fetch() unchecked, which made this route an

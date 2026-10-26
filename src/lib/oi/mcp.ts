@@ -321,7 +321,7 @@ export async function callTool(name: string, args: Record<string, unknown>, ctx:
     }
     case 'osiris_markets': {
       const group = oneOf(args.group, ['all', 'indices', 'stocks', 'oil', 'commodities', 'crypto', 'fx'] as const, 'all');
-      const { getQuotes } = await import('@/app/api/markets/route');
+      const { getQuotes } = await import('@/lib/market-feed');
       const quotes = (await getQuotes())
         .filter(q => group === 'all' || q.group === group)
         .map(q => ({ name: q.name, symbol: q.symbol, group: q.group, price: q.price, change_pct: Math.round(q.change_percent * 100) / 100, currency: q.currency, market_open: q.market_open }));

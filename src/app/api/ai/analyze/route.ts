@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createGroqClient,
+  GROQ_ANALYSIS_MODEL,
   rotateApiKey,
   analyzeIntelligence,
   type IntelligenceContext,
@@ -177,7 +178,7 @@ export async function POST(
     return NextResponse.json(
       {
         analysis,
-        model: 'mixtral-8x7b-32768',
+        model: GROQ_ANALYSIS_MODEL,
         timestamp: new Date().toISOString(),
       },
       {

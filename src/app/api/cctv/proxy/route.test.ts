@@ -11,7 +11,7 @@ vi.mock('@/lib/ssrf-guard', () => ({
     : { ok: true, resolved: ['127.0.0.1'] },
 }));
 
-import { GET, imageType } from './route';
+import { GET, imageType } from './handler';
 
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 const png = Buffer.concat([Buffer.from('\x89PNG\r\n\x1a\n', 'latin1'), Buffer.alloc(8)]);

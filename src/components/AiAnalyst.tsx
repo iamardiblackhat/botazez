@@ -61,6 +61,7 @@ interface NewsItem {
   risk_score: number;
   coords: [number, number] | null;
   machine_assessment: string | null;
+  keyword_assessment?: string | null;
 }
 
 interface GdeltEvent {
@@ -134,7 +135,7 @@ function buildContext(data: DashboardData): IntelligenceContext {
     source: item.source,
     risk_score: item.risk_score,
     coords: item.coords,
-    machine_assessment: item.machine_assessment,
+    keyword_assessment: item.keyword_assessment ?? item.machine_assessment ?? null,
   }));
 
   const threats = (data.gdelt || []).slice(0, 15).map((ev) => ({

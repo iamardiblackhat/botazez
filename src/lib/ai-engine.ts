@@ -229,15 +229,10 @@ function serializeContext(context: IntelligenceContext): string {
    ───────────────────────────────────────────────────────────── */
 
 export async function analyzeIntelligence(
-  client: GoogleGenerativeAI,
+  client: GoogleGenerativeAI | Groq,
   context: IntelligenceContext,
   userQuery: string
 ): Promise<string> {
-  const model: GenerativeModel = client.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    systemInstruction: SYSTEM_PROMPT,
-  });
-
   const contextData = serializeContext(context);
 
   const prompt = `## CURRENT OPERATIONAL DATA
@@ -248,9 +243,7 @@ ${userQuery}
 
 Provide your intelligence assessment based on the operational data above and the analyst's query.`;
 
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  return response.text();
+  return completeIntelligence(client, prompt);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -258,14 +251,9 @@ Provide your intelligence assessment based on the operational data above and the
    ───────────────────────────────────────────────────────────── */
 
 export async function generateBriefing(
-  client: GoogleGenerativeAI,
+  client: GoogleGenerativeAI | Groq,
   context: IntelligenceContext
 ): Promise<string> {
-  const model: GenerativeModel = client.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    systemInstruction: SYSTEM_PROMPT,
-  });
-
   const contextData = serializeContext(context);
 
   const prompt = `${BRIEFING_PROMPT}
@@ -275,7 +263,26 @@ ${contextData}
 
 Generate the briefing now.`;
 
+  return completeIntelligence(client, prompt);
+}
+
+/** Match the supplied provider; never send a Groq client through Gemini's API. */
+export const GROQ_ANALYSIS_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+async function completeIntelligence(client: GoogleGenerativeAI | Groq, prompt: string): Promise<string> {
+  if ('chat' in client) {
+    const result = await client.chat.completions.create({
+      model: GROQ_ANALYSIS_MODEL,
+      messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: prompt }],
+      temperature: 0.2,
+      max_tokens: 1200,
+    });
+    const answer = result.choices[0]?.message?.content?.trim();
+    if (!answer) throw new Error('The analysis provider returned an empty response.');
+    return answer;
+  }
+  const model: GenerativeModel = client.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: SYSTEM_PROMPT });
   const result = await model.generateContent(prompt);
-  const response = result.response;
-  return response.text();
+  const answer = result.response.text().trim();
+  if (!answer) throw new Error('The analysis provider returned an empty response.');
+  return answer;
 }

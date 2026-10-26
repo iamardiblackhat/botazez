@@ -176,7 +176,7 @@ export const liveSources: Sources = {
     return Array.isArray(body?.earthquakes) ? body.earthquakes : [];
   },
   async quotes() {
-    const { getQuotes } = await import('@/app/api/markets/route');
+    const { getQuotes } = await import('@/lib/market-feed');
     return getQuotes();
   },
 };
