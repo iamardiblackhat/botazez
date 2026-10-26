@@ -1,6 +1,6 @@
 {
-  "name": "osiris",
-  "version": "0.1.0",
+  "name": "botazez",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "predev": "node tools/prepare-map-worker.mjs",
