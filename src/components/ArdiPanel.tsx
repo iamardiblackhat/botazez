@@ -9,10 +9,10 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldCheck, Radar, Eye, Activity, Lock, Terminal, Crosshair, ArrowUpRight } from 'lucide-react';
+import { X, ShieldCheck, Radar, Eye, Activity, Lock, Terminal, Crosshair, ArrowUpRight, type LucideIcon } from 'lucide-react';
 
-// External ARDI destination — update to the live ARDI platform URL.
-const ARDI_URL = 'https://botazez.com';
+// Separate ARDI security workspace. Override when its custom domain is ready.
+const ARDI_URL = process.env.NEXT_PUBLIC_ARDI_URL || 'https://ardi-pen-test-api-server-one.vercel.app/';
 
 const IMAGES = {
   hero: '/ardi/ardi-hero.jpg',   // arms raised — energetic
@@ -20,7 +20,7 @@ const IMAGES = {
   guide: '/ardi/ardi-guide.jpg', // presenter — gesturing
 };
 
-const CAPABILITIES: { icon: any; label: string; desc: string }[] = [
+const CAPABILITIES: { icon: LucideIcon; label: string; desc: string }[] = [
   { icon: ShieldCheck, label: 'Cybersecurity Testing', desc: 'Offensive & defensive validation' },
   { icon: Activity, label: 'Threat Monitoring', desc: 'Continuous risk surveillance' },
   { icon: Radar, label: 'OSINT Analysis', desc: 'Open-source intelligence fusion' },
