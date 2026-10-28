@@ -93,7 +93,7 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
     if (!onClose || embedded) return;
     const handler = (e: MouseEvent) => {
       const t = e.target as Element | null;
-      if (boxRef.current?.contains(t as Node) || t?.closest('[data-search-toggle]')) return;
+      if (boxRef.current?.contains(t as Node) || t?.closest('[data-search-toggle], [data-panel-controls]')) return;
       onClose();
     };
     document.addEventListener('mousedown', handler);

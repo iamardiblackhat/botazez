@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { X, ExternalLink, RefreshCw, MapPin, Camera, CameraOff, Maximize2, PlayCircle } from 'lucide-react';
+import PanelControls from './PanelControls';
+import { X, ExternalLink, RefreshCw, MapPin, Camera, CameraOff, Maximize2, PlayCircle, Minus } from 'lucide-react';
 import Hls from 'hls.js';
 import { isHostedOffPlatform, liveFeedAtSource, localEmbed, needsResolution, offPlatformView } from '@/lib/camera-feed';
 import { clearLook, registerVideo } from '@/lib/vision/store';
@@ -23,6 +24,8 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
   const [error, setError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const [minimised, setMinimised] = useState(false);
+  const closeCamera = useCallback(() => { setMinimised(false); setFullscreen(false); onClose(); }, [onClose]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
 
@@ -167,10 +170,10 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
 
   useEffect(() => {
     if (!camera) return;
-    const keyboard = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } };
+    const keyboard = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); closeCamera(); } };
     document.addEventListener('keydown', keyboard);
     return () => document.removeEventListener('keydown', keyboard);
-  }, [camera, onClose]);
+  }, [camera, closeCamera]);
 
   if (!camera || typeof document === 'undefined') return null;
 
@@ -181,13 +184,15 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.3, type: "spring", bounce: 0 }}
-          role="dialog" aria-label={`Camera: ${camera.name}`} className={`camera-viewer fixed z-[500] ${
-            fullscreen
+          role="dialog" aria-label={`Camera: ${camera.name}`} data-minimised={minimised} className={`camera-viewer fixed z-[500] ${
+            fullscreen && !minimised
               ? 'inset-2 md:inset-4'
               : `bottom-[70px] left-2 right-2 md:bottom-6 ${besideOi ? 'md:right-[500px]' : 'md:right-6'} md:left-auto md:w-[480px]`
           }`}
         >
           <div className="camera-viewer-frame omnelia-glass h-full flex flex-col">
+            {minimised && <PanelControls title="Camera viewer" minimised={true} onToggle={() => setMinimised(false)} onClose={closeCamera}/>}
+            <div className="camera-viewer-body" hidden={minimised}>
 
             {/* Tactical Header */}
             <div className="flex flex-col border-b border-[var(--border-primary)] bg-black/60 relative z-10">
@@ -226,10 +231,11 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
                       <MapPin className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--gold-primary)]" />
                     </button>
                   )}
+                  <button type="button" aria-label="Minimise Camera viewer" title="Minimise to see the map" onClick={() => { setMinimised(true); setFullscreen(false); }} className="p-1.5 rounded-sm bg-white/5 border border-white/10"><Minus className="w-4 h-4"/></button>
                   <button aria-label={fullscreen ? 'Restore camera viewer' : 'Expand camera viewer'} onClick={() => setFullscreen(!fullscreen)} className="block p-1.5 rounded-sm bg-white/5 border border-white/10 hover:bg-[var(--text-primary)]/20 hover:border-[var(--text-primary)] transition-all" title="Toggle fullscreen">
                     <Maximize2 className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" />
                   </button>
-                  <button aria-label="Close camera viewer" onClick={onClose} className="p-1.5 rounded-sm bg-red-900/30 border border-red-500/30 hover:bg-red-500/30 hover:border-red-500 transition-all ml-2">
+                  <button aria-label="Close camera viewer" onClick={closeCamera} className="p-1.5 rounded-sm bg-red-900/30 border border-red-500/30 hover:bg-red-500/30 hover:border-red-500 transition-all ml-2">
                     <X className="w-4 h-4 md:w-3 md:h-3 text-red-400 hover:text-red-200" />
                   </button>
                 </div>
@@ -400,6 +406,7 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
                   <MapPin className="w-2.5 h-2.5" /> Map location
                 </a>
               </div>
+            </div>
             </div>
           </div>
         </div>

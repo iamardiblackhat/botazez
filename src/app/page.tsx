@@ -46,6 +46,7 @@ import ArdiPanel from '@/components/ArdiPanel';
 import IntelligenceOverview from '@/components/IntelligenceOverview';
 import type { PublicCamera } from '@/components/CameraDirectory';
 import MapToolPanel from '@/components/MapToolPanel';
+import PanelControls, { PanelWindowContext } from '@/components/PanelControls';
 import { applyDashboardView, DASHBOARD_VIEWS } from '@/lib/dashboard-views';
 import OmneliaBrand from '@/components/OmneliaBrand';
 import { useOi } from '@/lib/oi/client';
@@ -325,13 +326,21 @@ export default function Dashboard() {
   const layerLiveStatus = useMemo(() => (transitStatus ? { transit: transitStatus.text } : undefined), [transitStatus]);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number; bounds?: { west: number; south: number; east: number; north: number } } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [mobilePanel, setMobilePanel] = useState<'layers'|'markets'|'intel'|'search'|'recon'|'remote'|'oi'|'overview'|'tools'|null>(null);
+  const [mobilePanel, setMobilePanelState] = useState<'layers'|'markets'|'intel'|'search'|'recon'|'remote'|'oi'|'overview'|'tools'|null>(null);
+  const [mobileMinimised, setMobileMinimised] = useState(false);
+  const [directionsMinimised, setDirectionsMinimised] = useState(false);
+  const setMobilePanel = useCallback((next: typeof mobilePanel) => {
+    setMobilePanelState(next);
+    setMobileMinimised(false);
+  }, []);
+  const mobilePanelTitle = mobilePanel === 'tools' ? 'More tools' : mobilePanel === 'overview' ? 'Intelligence overview' : mobilePanel === 'layers' ? 'Layers' : mobilePanel === 'markets' ? 'Markets' : mobilePanel === 'intel' ? 'Alerts' : mobilePanel === 'recon' ? 'Research tools' : mobilePanel === 'remote' ? 'Nearby devices' : mobilePanel === 'oi' ? 'AI assistant' : 'Search places';
 
   // ── OSIRIS OI ── the run lives here, not in the panel, so the globe keeps
   // drawing it while the panel is closed. State goes to the map's OI layer
   // directly rather than through a prop, so the map does not re-render per event.
   const oi = useOi();
   const [showOi, setShowOi] = useState(false);
+  const [oiDraft, setOiDraft] = useState('');
   /** What is selected on the globe or in the panel: a point's key, or "link:<id>" for an arc. */
   const [oiSelected, setOiSelected] = useState<string | null>(null);
   const [oiHover, setOiHover] = useState<OiHover | null>(null);
@@ -383,7 +392,7 @@ export default function Dashboard() {
   const oiTheaterOn = oiTheater;
   const oiHasRun = Boolean(oi.state);
   // On a phone the drawer covers the lower half: the globe, and anywhere OI flies to, centre in the space above it.
-  const oiDrawerOpen = mobilePanel === 'oi';
+  const oiDrawerOpen = mobilePanel === 'oi' && !mobileMinimised;
   useEffect(() => {
     if (!oiDrawerOpen) return;
     const drawer = Math.round(Math.min(window.innerHeight * 0.55, window.innerHeight - 100)) + 52;
@@ -633,6 +642,7 @@ export default function Dashboard() {
     onTerrainFocus: () => setTerrainFocus(value => value + 1),
   };
   const [capabilities, setCapabilities] = useState<Record<string, boolean>>({});
+  const [liveFeedMinimised, setLiveFeedMinimised] = useState(false);
   const [liveFeedUrl, setLiveFeedUrl] = useState<string | null>(null);
   const [liveFeedName, setLiveFeedName] = useState('');
   const [liveFeedEmbedAllowed, setLiveFeedEmbedAllowed] = useState(true);
@@ -1538,7 +1548,7 @@ export default function Dashboard() {
           <AnimatePresence>
             {showAlerts && (
               <MapToolPanel width={320} title="Alerts" onClose={() => setShowAlerts(false)}>
-                <LiveAlerts data={data} onLocate={(lat, lng, options) => setFlyToLocation({ lat, lng, zoom: options?.zoom, alertId: options?.alertId, ts: Date.now() })} pinsOn={activeLayers.alert_pins} onTogglePins={on => setActiveLayers(prev => ({ ...prev, alert_pins: on }))} onPinnedChange={setPinnedAlertIds} onWatchFeed={(url, name) => { setLiveFeedUrl(url); setLiveFeedName(name); }} onRefresh={() => fetchEndpoint('/api/news', newsTransform)} />
+                <LiveAlerts data={data} onLocate={(lat, lng, options) => setFlyToLocation({ lat, lng, zoom: options?.zoom, alertId: options?.alertId, ts: Date.now() })} pinsOn={activeLayers.alert_pins} onTogglePins={on => setActiveLayers(prev => ({ ...prev, alert_pins: on }))} onPinnedChange={setPinnedAlertIds} onWatchFeed={(url, name) => { setLiveFeedMinimised(false); setLiveFeedUrl(url); setLiveFeedName(name); }} onRefresh={() => fetchEndpoint('/api/news', newsTransform)} />
               </MapToolPanel>
             )}
           </AnimatePresence>
@@ -1577,7 +1587,7 @@ export default function Dashboard() {
           <AnimatePresence>
             {showOi && (
               <MapToolPanel width={412} title="AI assistant" onClose={() => setShowOi(false)}>
-                <OiPanel oi={oi} selected={oiSelected} onSelect={setOiSelected} onClose={() => { setShowOi(false); setOiTheater(false); setOiAutoFocus(false); }}
+                <OiPanel draft={oiDraft} onDraftChange={setOiDraft} oi={oi} selected={oiSelected} onSelect={setOiSelected} onClose={() => { setShowOi(false); setOiTheater(false); setOiAutoFocus(false); }}
                   focus={oiFocus} onFocus={toggleOiFocus} onLocate={handleOiLocate}
                   theater={oiTheater} onTheater={setOiTheater} following={oiFollowing} onFollow={followOi}
                   assist={assist} mode={oiMode} onMode={setOiMode} speakOn={oiVoice} onSpeak={setOiVoicePersist} autoFocus={oiAutoFocus}
@@ -1755,6 +1765,8 @@ export default function Dashboard() {
         className={`dashboard-directions absolute ${isMobile ? 'top-3' : 'top-[64px]'} z-[400] w-[min(92vw,384px)] pointer-events-auto`}
         style={isMobile ? { left: '50%', transform: 'translateX(-50%)' } : { right: '56px' }}
       >
+        {(showDirections || navSession) && <PanelControls title="Directions" minimised={directionsMinimised} onToggle={() => setDirectionsMinimised(value => !value)} onClose={() => { setShowDirections(false); setNavSession(null); setNavProgress(null); setFollowUser(false); setActiveRoute(null); setRouteTarget(null); setDirectionsMinimised(false); }} />}
+        <div className="panel-window-body" hidden={directionsMinimised}>
         {navSession ? (
           <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
             <NavigationView
@@ -1817,17 +1829,18 @@ export default function Dashboard() {
             />
           </motion.div>
         )}
+        </div>
       </div>
 
       {/* ── SEARCH — a spotlight at the top of the map: places, addresses, coordinates ── */}
       <AnimatePresence>
         {showDesktopSearch && !isMobile && (
-          <div data-hud className="absolute top-[92px] left-1/2 -translate-x-1/2 z-[450] w-[min(560px,calc(100vw-180px))] pointer-events-auto">
+          <MapToolPanel width={560} title="Search places" onClose={() => setShowDesktopSearch(false)}>
             <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} transition={{ duration: 0.16 }}>
               <SearchBar center={mapCenter} onClose={() => setShowDesktopSearch(false)} onDirections={openDirectionsTo}
                 onLocate={(lat, lng, zoom) => setFlyToLocation({ lat, lng, zoom, ts: Date.now() })} />
             </motion.div>
-          </div>
+          </MapToolPanel>
         )}
       </AnimatePresence>
 
@@ -1946,15 +1959,17 @@ export default function Dashboard() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+            className={liveFeedMinimised ? 'live-feed-minimised' : 'fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-sm'}
             onClick={() => setLiveFeedUrl(null)}
           >
             <motion.div
               initial={{ y: 20 }}
               animate={{ y: 0 }}
-              className="w-[90vw] max-w-[900px] flex flex-col relative rounded-xl overflow-hidden border border-[var(--border-primary)] shadow-2xl bg-black"
+              role="dialog" aria-label="Video viewer" className={`${liveFeedMinimised ? 'w-full' : 'w-[90vw]'} max-w-[900px] flex flex-col relative rounded-xl overflow-hidden border border-[var(--border-primary)] shadow-2xl bg-black`}
               onClick={e => e.stopPropagation()}
             >
+              <PanelControls title="Video viewer" minimised={liveFeedMinimised} onToggle={() => setLiveFeedMinimised(value => !value)} onClose={() => { setLiveFeedUrl(null); setLiveFeedMinimised(false); }}/>
+              <div className="panel-window-body" hidden={liveFeedMinimised}>
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-2.5 bg-[#111] border-b border-[var(--border-primary)]">
                 <div className="flex items-center gap-2">
@@ -2023,6 +2038,7 @@ export default function Dashboard() {
                   </span>
                 </div>
               )}
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -2057,12 +2073,14 @@ export default function Dashboard() {
                         // ended from the navigation view's own exit.
                         if (navSession) return;
                         setMobilePanel(null);
+                        setDirectionsMinimised(false);
                         setShowDirections((open) => {
                           if (open) setActiveRoute(null);
                           return !open;
                         });
                         return;
                       }
+                      if (mobilePanel === tab.id && mobileMinimised) { setMobileMinimised(false); return; }
                       if (tab.id === 'overview') setOverviewStartTab('events');
                       setMobilePanel(mobilePanel === tab.id ? null : tab.id);
                     }}
@@ -2084,17 +2102,14 @@ export default function Dashboard() {
               <motion.div
                 initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                data-minimised={mobileMinimised}
                 className={`dashboard-mobile-drawer fixed bottom-[52px] left-0 right-0 z-[400] glass-panel ${mobilePanel === 'oi' ? 'oi-glass' : ''} rounded-b-none overflow-y-auto styled-scrollbar`}
                 style={{ maxHeight: 'min(55vh, calc(100dvh - 100px))', paddingBottom: 'env(safe-area-inset-bottom, 4px)' }}
               >
                 <div className="mobile-drawer-handle" />
                 <div className="px-3 pb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="hud-text text-[10px] text-[var(--text-primary)]">
-                      {mobilePanel === 'tools' ? 'MORE TOOLS' : mobilePanel === 'overview' ? 'INTELLIGENCE OVERVIEW' : mobilePanel === 'layers' ? 'LAYERS & STATS' : mobilePanel === 'markets' ? 'MARKETS & INTEL' : mobilePanel === 'intel' ? 'INTEL FEED' : mobilePanel === 'recon' ? 'BOTAZEZ RECON' : mobilePanel === 'remote' ? 'WORLD REMOTE' : mobilePanel === 'oi' ? 'ARDI OI' : 'SEARCH'}
-                    </span>
-                    <button aria-label="Close workspace panel" onClick={() => setMobilePanel(null)} className="text-[var(--text-muted)] p-1"><X className="w-4 h-4" /></button>
-                  </div>
+                  <PanelControls title={mobilePanelTitle} minimised={mobileMinimised} onToggle={() => setMobileMinimised(value => !value)} onClose={() => setMobilePanel(null)}/>
+                  <PanelWindowContext.Provider value={{ minimise: () => setMobileMinimised(true), close: () => setMobilePanel(null) }}><div className="panel-window-body" hidden={mobileMinimised}>
                   {mobilePanel === 'tools' && <div className="dashboard-more-tools">
                     {([
                       ['cameras', 'Cameras', 'Find a public camera and open its viewer.'],
@@ -2135,7 +2150,7 @@ export default function Dashboard() {
                   )}
                   {mobilePanel === 'markets' && <MarketsPanel data={data} spaceWeather={spaceWeather} />}
                   {mobilePanel === 'oi' && (
-                    <OiPanel oi={oi} selected={oiSelected} onSelect={setOiSelected} embedded focus={oiFocus} onFocus={toggleOiFocus}
+                    <OiPanel draft={oiDraft} onDraftChange={setOiDraft} oi={oi} selected={oiSelected} onSelect={setOiSelected} embedded focus={oiFocus} onFocus={toggleOiFocus}
                       onLocate={handleOiLocate} following={oiFollowing} onFollow={followOi}
                       assist={assist} mode={oiMode} onMode={setOiMode} speakOn={oiVoice} onSpeak={setOiVoicePersist}
                       stage={oiStage} onStage={setOiStage} />
@@ -2163,6 +2178,7 @@ export default function Dashboard() {
                       if (devs.length > 0) setFlyToLocation({ lat: devs[0].lat, lng: devs[0].lng, ts: Date.now() });
                     }} />
                   )}
+                  </div></PanelWindowContext.Provider>
                 </div>
               </motion.div>
             )}

@@ -9,9 +9,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import OmneliaBrand from './OmneliaBrand';
+import PanelControls from './PanelControls';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldCheck, Radar, Eye, Activity, Lock, Terminal, Crosshair, ArrowUpRight, type LucideIcon } from 'lucide-react';
+import { ShieldCheck, Radar, Eye, Activity, Lock, Terminal, Crosshair, ArrowUpRight, type LucideIcon } from 'lucide-react';
 
 // Separate ARDI security workspace. Override when its custom domain is ready.
 const ARDI_URL = process.env.NEXT_PUBLIC_ARDI_URL || 'https://ardi-pen-test-api-server-one.vercel.app/';
@@ -41,9 +42,10 @@ function ImgWithFallback({ src, alt, className, style }: { src: string; alt: str
 
 export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [minimised, setMinimised] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || minimised) return;
     const previous = document.activeElement as HTMLElement | null;
     const frame = requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus());
     const keyboard = (event: KeyboardEvent) => {
@@ -56,13 +58,13 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
     };
     document.addEventListener('keydown', keyboard);
     return () => { cancelAnimationFrame(frame); document.removeEventListener('keydown', keyboard); previous?.focus(); };
-  }, [isOpen]);
+  }, [isOpen, minimised]);
 
   return (
     <>
       {/* ── Launcher chip (replaces donation chip) ── */}
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => { setIsOpen(true); setMinimised(false); }}
         aria-label="Open ARDI Sec"
         className={`ardi-chip pointer-events-auto glass-panel flex items-center font-mono tracking-widest transition-all hover:opacity-95 ${compact ? 'gap-1.5 px-3 py-2 text-[15px]' : 'gap-2 px-5 py-2.5 text-[18px] ml-4'}`}
         style={{
@@ -83,11 +85,11 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-auto px-3 py-6"
+            className={minimised ? 'ardi-dialog-minimised pointer-events-auto' : 'fixed inset-0 z-[1000] flex items-center justify-center pointer-events-auto px-3 py-6'}
             onClick={() => setIsOpen(false)}
           >
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/75 backdrop-blur-md" />
+            <div hidden={minimised} className="absolute inset-0 bg-black/75 backdrop-blur-md" />
 
             {/* Poster */}
             <motion.div
@@ -95,29 +97,15 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               transition={{ type: 'spring', damping: 26, stiffness: 260 }}
-              ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="ardi-panel-title" className="omnelia-glass relative w-full max-w-5xl max-h-[90vh] overflow-y-auto styled-scrollbar rounded-2xl border"
+              ref={dialogRef} role="dialog" aria-modal={!minimised} aria-labelledby="ardi-panel-title" className="omnelia-glass relative w-full max-w-5xl max-h-[90vh] overflow-y-auto styled-scrollbar rounded-2xl border"
               onClick={e => e.stopPropagation()}
             >
               {/* Ambient grid + glow */}
               <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'linear-gradient(rgba(20,241,149,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(20,241,149,0.6) 1px, transparent 1px)', backgroundSize: '44px 44px' }} />
               <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full" style={{ background: 'radial-gradient(circle, rgba(20,241,149,0.16), transparent 62%)' }} />
 
-              {/* Header */}
-              <div className="relative flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-md" style={{ background: 'rgba(20,241,149,0.12)', border: '1px solid rgba(20,241,149,0.4)' }}>
-                    <ShieldCheck className="w-3.5 h-3.5" style={{ color: '#14F195' }} />
-                  </div>
-                  <div className="flex flex-col leading-none">
-                    <span className="font-mono font-bold tracking-[0.32em] text-[13px]" style={{ color: '#EAFBF3' }}>ARDI</span>
-                    <span className="font-mono tracking-[0.24em] text-[10px] mt-1" style={{ color: '#14F195' }}>AUTONOMOUS RECON &amp; DEFENSE INTELLIGENCE</span>
-                  </div>
-                </div>
-                <button aria-label="Close ARDI panel" onClick={() => setIsOpen(false)} className="p-1.5 rounded hover:bg-white/10 transition-colors">
-                  <X className="w-4 h-4 text-[var(--text-muted)] hover:text-white" />
-                </button>
-              </div>
-
+              <PanelControls title="ARDI Sec" minimised={minimised} onToggle={() => setMinimised(value => !value)} onClose={() => setIsOpen(false)}/>
+              <div className="panel-window-body" hidden={minimised}>
               <div className="relative flex justify-center px-5 pt-6 select-none"><ImgWithFallback src="/brand/ardi-sec-glass.webp" alt="ARDI Sec liquid-glass mascot" className="h-[190px] sm:h-[260px] w-auto max-w-full object-contain" /></div>
 
               <div className="relative text-center pt-3"><OmneliaBrand /></div>
@@ -169,6 +157,7 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
                     <svg viewBox="0 0 24 24" fill="none" stroke="#14F195" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><rect x="2" y="2" width="20" height="20" rx="5.5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="#14F195" stroke="none" /></svg> @ardi.blackhat
                   </a>
                 </div>
+              </div>
               </div>
             </motion.div>
           </motion.div>

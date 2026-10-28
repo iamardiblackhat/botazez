@@ -54,6 +54,8 @@ export interface WorkspaceProps {
   onLocate: (lat: number, lng: number, zoom?: number) => void;
   onAsk: (agentId: string) => void;
   onTheater?: (on: boolean) => void;
+  onMinimise?: () => void;
+  onClose?: () => void;
   focus?: boolean;
   onFocus?: () => void;
   following?: boolean;
@@ -185,6 +187,8 @@ export function Workspace(p: WorkspaceProps) {
           {s && <Controls s={s} oi={oi} focus={p.focus} onFocus={p.onFocus} following={p.following} onFollow={p.onFollow} />}
           {s && <Chip onClick={share} on={copied} title="Copy a link that replays this run">{copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Link'}</Chip>}
           {s && <IconButton title="New forecast" onClick={p.onNewForecast}><Plus className="w-3.5 h-3.5" /></IconButton>}
+          <IconButton title="Minimise AI assistant" onClick={() => p.onMinimise?.()}><span aria-hidden="true">−</span></IconButton>
+          <IconButton title="Close AI assistant" onClick={() => p.onClose?.()}><span aria-hidden="true">×</span></IconButton>
           <IconButton title="Leave full screen (Esc)" onClick={() => onTheater?.(false)}><Minimize2 className="w-3.5 h-3.5" /></IconButton>
         </div>
         {s && (
