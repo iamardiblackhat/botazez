@@ -5,7 +5,10 @@ import React from 'react';
 import sharp from 'sharp';
 const root = new URL('../', import.meta.url);
 const file = path => new URL(path, root);
-const mark = await readFile(file('public/brand/botazez-mark.svg'));
+const ardi = await readFile(file('public/brand/ardi-sec-glass.webp'));
+const ardiPng = await sharp(ardi).png().toBuffer();
+const mark = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title"><title id="title">ARDI — Botazez by Omnelia SI</title><defs><linearGradient id="rim" x2="1" y2="1"><stop stop-color="#efffff"/><stop offset=".25" stop-color="#c7a0ff"/><stop offset=".6" stop-color="#57f1ef"/><stop offset="1" stop-color="#ffadd7"/></linearGradient><linearGradient id="glass" x2=".8" y2="1"><stop stop-color="#262439"/><stop offset=".5" stop-color="#09131c"/><stop offset="1" stop-color="#113a32"/></linearGradient></defs><rect x="6" y="6" width="500" height="500" rx="112" fill="url(#rim)"/><rect x="20" y="20" width="472" height="472" rx="100" fill="url(#glass)"/><image href="data:image/png;base64,${ardiPng.toString('base64')}" x="76" y="36" width="360" height="440" preserveAspectRatio="xMidYMid meet"/></svg>`);
+await writeFile(file('public/brand/botazez-mark.svg'),mark);
 for (const size of [16,32,48,180,192,512]) {
   await sharp(mark).resize(size,size).png().toFile(file(`public/brand/botazez-icon-${size}.png`).pathname);
 }
@@ -23,7 +26,7 @@ const aliases = {
 for (const [name,size] of Object.entries(aliases)) await copyFile(file(`public/brand/botazez-icon-${size}.png`),file(`public/${name}`));
 const geist = await readFile(file('node_modules/next/dist/compiled/@vercel/og/Geist-Regular.ttf'));
 const zodiak = await readFile(file('public/brand/zodiak-light.ttf'));
-const mascot = await readFile(file('public/brand/omnelia-mascot.png'));
+const mascot = ardiPng;
 const h = React.createElement;
 const text = (content, style) => h('div',{style:{display:'flex',position:'absolute',...style}},content);
 const image = new ImageResponse(h('div',{style:{width:'100%',height:'100%',display:'flex',background:'#060a12',color:'#edf4ff',fontFamily:'Geist',position:'relative'}},
@@ -34,9 +37,10 @@ const image = new ImageResponse(h('div',{style:{width:'100%',height:'100%',displ
  text('World map · Cameras · Public-source intelligence',{left:76,top:366,width:650,fontSize:21,color:'#c6d4e4'}),
  h('div',{style:{display:'flex',position:'absolute',left:76,top:434,alignItems:'baseline',gap:10,fontSize:22,color:'#c6d4e4'}},'by ',h('span',{style:{fontFamily:'Zodiak',fontStyle:'italic',fontSize:36,color:'#c7a0ff'}},'Omnelia'),h('span',{style:{fontFamily:'Zodiak',fontStyle:'italic',fontSize:36,color:'#57f1ef'}},'SI')),
  text('botazez.com',{left:76,top:537,fontSize:22,color:'#57f1ef',letterSpacing:1}),
- h('img',{src:`data:image/png;base64,${mascot.toString('base64')}`,alt:'Omnelia SI mascot',width:352,height:500,style:{position:'absolute',right:56,top:65,objectFit:'contain'}})
+ h('img',{src:`data:image/png;base64,${mascot.toString('base64')}`,alt:'ARDI — Botazez intelligence assistant',width:352,height:500,style:{position:'absolute',right:56,top:65,objectFit:'contain'}})
 ),{width:1200,height:630,fonts:[{name:'Geist',data:geist,weight:400,style:'normal'},{name:'Zodiak',data:zodiak,weight:300,style:'italic'}]});
 const social = Buffer.from(await image.arrayBuffer());
-await writeFile(file('public/brand/botazez-social-v2.png'),social);
+await writeFile(file('public/brand/botazez-social-v3.png'),social);
 await writeFile(file('public/og-image.png'),social);
+await writeFile(file('public/brand/botazez-social-v2.png'),social);
 console.log('Built Botazez icons and 1200×630 social preview from approved brand assets.');

@@ -1337,12 +1337,12 @@ export default function Dashboard() {
               initial={{ opacity: 0, scale: 0.7, filter: 'blur(12px)' }}
               animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
               transition={{ duration: 0.9, ease: [0.34, 1.56, 0.64, 1] }}
-              className="relative w-44 h-44 md:w-52 md:h-52 mb-8 flex items-center justify-center z-[2]"
+              className="ardi-launch-mark relative mb-6 flex items-center justify-center z-[2]"
             >
               <div className="absolute inset-[-12%] rounded-full" style={{ background: 'radial-gradient(circle, rgba(0,229,255,0.18) 0%, transparent 68%)' }} />
               <motion.img
-                src="/brand/botazez-mark.svg"
-                alt="Botazez by Omnelia SI"
+                src="/brand/ardi-sec-glass.webp"
+                alt="ARDI — Botazez by Omnelia SI"
                 className="relative w-full h-full object-contain"
                 style={{ filter: 'drop-shadow(0 0 26px rgba(0,229,255,0.28))' }}
                 animate={{ scale: [1, 1.035, 1] }}
@@ -1447,7 +1447,7 @@ export default function Dashboard() {
 
 
       {dashboardColumns && <header className="dashboard-masthead omnelia-glass">
-        <div className="dashboard-identity"><h1>BOTAZEZ</h1><OmneliaBrand /></div>
+        <div className="dashboard-identity"><img className="ardi-desktop-mark" src="/brand/ardi-sec-glass.webp" alt="ARDI — Botazez intelligence assistant"/><div className="dashboard-brand-name"><h1>BOTAZEZ</h1><OmneliaBrand /></div></div>
         <span className="dashboard-workspace-label">Intelligence workspace</span>
         <nav aria-label="Workspace navigation"><button onClick={() => { setFlyToLocation({ lat: 20, lng: 0, zoom: 0.8, ts: Date.now() }); }}>World map</button><button aria-pressed={overviewStartTab === 'cameras'} onClick={() => setOverviewStartTab('cameras')}>Cameras</button><button aria-pressed={overviewStartTab === 'events'} onClick={() => setOverviewStartTab('events')}>Intelligence</button><a href="/docs">Guide</a><ArdiPanel /></nav>
       </header>}
@@ -1878,7 +1878,7 @@ export default function Dashboard() {
       {/* ── HEADER ── */}
       <motion.div data-hud initial={{ opacity: 0, y: -20 }} animate={revealed ? { opacity: 1, y: 0 } : { opacity: 0, y: -20 }} transition={hudIn(0.15)} className={`botazez-map-header absolute top-4 z-[200] pointer-events-none flex flex-col`} style={{ left: isMobile ? '24px' : '64px', right: '24px' }}>
         <div className="omnelia-brand-lockup omnelia-glass flex items-center gap-3 w-fit">
-          <img src="/brand/botazez-mark.svg" alt="Botazez by Omnelia SI" className="w-9 h-9 md:w-11 md:h-11 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]" />
+          <img src="/brand/ardi-sec-glass.webp" alt="ARDI — Botazez by Omnelia SI" className="w-9 h-9 md:w-11 md:h-11 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]" />
           <div className="flex flex-col items-start gap-0.5">
             <h1 className="text-lg md:text-xl font-bold tracking-[0.4em] text-[#D4AF37] font-mono">BOTAZEZ</h1>
             <span className="botazez-tagline text-[11px] md:text-[12px] font-mono tracking-[0.2em] opacity-80 uppercase text-[#D4AF37]">GLOBAL INTELLIGENCE COMMAND</span>

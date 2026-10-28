@@ -4,8 +4,8 @@ export const SITE_URL = 'https://botazez.com';
 export const SITE_NAME = 'Botazez';
 export const SITE_TITLE = 'Botazez — Intelligence Dashboard by Omnelia SI';
 export const SITE_DESCRIPTION = 'Explore the world with Botazez by Omnelia SI: an interactive intelligence dashboard for maps, public cameras, events and source-backed research.';
-export const SHARE_IMAGE = `${SITE_URL}/brand/botazez-social-v2.png`;
-const images = [{ url: SHARE_IMAGE, width: 1200, height: 630, type: 'image/png', alt: 'Botazez intelligence dashboard by Omnelia SI, featuring the Omnelia mascot.' }];
+export const SHARE_IMAGE = `${SITE_URL}/brand/botazez-social-v3.png`;
+const images = [{ url: SHARE_IMAGE, width: 1200, height: 630, type: 'image/png', alt: 'Botazez intelligence dashboard by Omnelia SI, featuring the liquid-glass ARDI character.' }];
 
 export const brandMetadata: Metadata = {
   metadataBase: new URL(SITE_URL),

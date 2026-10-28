@@ -43,3 +43,8 @@ Botazez and Omnelia SI now share one metadata definition in `src/lib/site-brand.
 Both install manifests reference real 192px and 512px icons and allow portrait screens. Legacy icon/share-image URL paths carry the new artwork too, including Next's file-based favicon. The public sitemap lists the dashboard, guide and privacy pages. Upstream licensing and internal storage/environment identifiers are retained; public product branding and publisher metadata use Botazez and Omnelia SI.
 
 Crawler checks on the built homepage, guide and privacy page returned HTTP 200 with the new preview image, branded titles and canonical URLs. Icon, image and manifest endpoints returned HTTP 200 with appropriate content types. Seven branding regression tests cover assets, manifests, metadata and crawler files. These checks establish the built implementation; search engines and messaging services control their own cached previews after deployment.
+
+
+## Global ARDI identity correction
+
+The liquid-glass ARDI character is now the global Botazez visual identity: the loading screen, desktop masthead, tablet/mobile header, guide/privacy mastheads, public favicons/install icons and social card use the same approved ARDI artwork. The native B monogram is replaced. The full character is contained without clipping; its approved form, material and ARDI chest marking stay intact. Omnelia SI remains the parent-brand credit. The dark investigative presentation reflects the user's stated meaning of Botazez, while the interface continues to describe its actual public-source capabilities.

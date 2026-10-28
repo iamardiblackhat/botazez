@@ -34,10 +34,11 @@ describe('public Botazez branding', () => {
     expect(await readFile(asset('public/osiris-icon.png'))).toEqual(await readFile(asset('public/brand/botazez-icon-512.png')));
   });
   it('ships the complete social image rather than an obsolete fallback', async () => {
-    const image = await readFile(asset('public/brand/botazez-social-v2.png'));
+    const image = await readFile(asset('public/brand/botazez-social-v3.png'));
     const dimensions = await sharp(image).metadata();
     expect([dimensions.width,dimensions.height]).toEqual([1200,630]);
     expect(await readFile(asset('public/og-image.png'))).toEqual(image);
+    expect(await readFile(asset('public/brand/botazez-social-v2.png'))).toEqual(image);
   });
   it('keeps the crawlable site identity and page list current', async () => {
     const robots = await readFile(asset('public/robots.txt'),'utf8');

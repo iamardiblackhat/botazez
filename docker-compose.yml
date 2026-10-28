@@ -83,9 +83,9 @@ x-casaos:
   title:
     en_us: Botazez by Omnelia SI
   icon: https://botazez.com/brand/botazez-icon-512.png
-  thumbnail: https://botazez.com/brand/botazez-social-v2.png
+  thumbnail: https://botazez.com/brand/botazez-social-v3.png
   screenshot_link:
-    - https://botazez.com/brand/botazez-social-v2.png
+    - https://botazez.com/brand/botazez-social-v3.png
   scheme: http
   hostname: ""
   port_map: "3000"
