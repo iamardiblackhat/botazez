@@ -339,7 +339,12 @@ export default function Dashboard() {
   // drawing it while the panel is closed. State goes to the map's OI layer
   // directly rather than through a prop, so the map does not re-render per event.
   const oi = useOi();
-  const [showOi, setShowOi] = useState(false);
+  const [showOi, setShowOiState] = useState(false);
+  const [oiMinimised, setOiMinimised] = useState(false);
+  const setShowOi = useCallback((next: boolean | ((previous: boolean) => boolean)) => {
+    setOiMinimised(false);
+    setShowOiState(next);
+  }, []);
   const [oiDraft, setOiDraft] = useState('');
   /** What is selected on the globe or in the panel: a point's key, or "link:<id>" for an arc. */
   const [oiSelected, setOiSelected] = useState<string | null>(null);
@@ -382,11 +387,18 @@ export default function Dashboard() {
     if (window.matchMedia('(max-width:1199px), (max-height:619px)').matches) setMobilePanel('oi');
     else setShowOi(true);
   }, []);
+  // Keep the conversation mounted while revealing an assistant's map destination.
+  const revealAssistantMap = useCallback(() => {
+    setOiTheater(false);
+    setOiMinimised(true);
+    setMobileMinimised(true);
+  }, []);
   // Going somewhere on purpose takes the camera off the director.
   const handleOiLocate = useCallback((lat: number, lng: number, zoom?: number) => {
     oiGlobe.current?.follow(false);
     setFlyToLocation({ lat, lng, zoom, ts: Date.now() });
-  }, []);
+    revealAssistantMap();
+  }, [revealAssistantMap]);
   const followOi = useCallback(() => oiGlobe.current?.follow(true), []);
   // Full screen: the workspace's columns sit either side, and the globe stays centred on the stage between.
   const oiTheaterOn = oiTheater;
@@ -560,7 +572,7 @@ export default function Dashboard() {
     data: () => dataRef.current,
     view: () => assistView.current,
     layers: () => assistLayers.current,
-    flyTo: (lat, lng, zoom) => { oiGlobe.current?.follow(false); setFlyToLocation({ lat, lng, zoom, ts: Date.now() }); },
+    flyTo: handleOiLocate,
     setLayers: (on, off) => setActiveLayers(prev => {
       const next = { ...prev } as Record<string, boolean>;
       for (const k of on) if (k in next) next[k] = true;
@@ -606,7 +618,7 @@ export default function Dashboard() {
       const out = await look(cam, { watch, by: 'oi' });
       return { analysis: out.analysis, watch: out.watch };
     },
-  }), [openFromAssist]);
+  }), [openFromAssist, handleOiLocate]);
   const assist = useAssist({
     site: assistSite,
     startForecast: async (question, depth, auth) => {
@@ -1586,7 +1598,7 @@ export default function Dashboard() {
           {!showOi && <span className="absolute right-14 top-1/2 -translate-y-1/2 px-2 py-1 text-[9px] font-mono tracking-wider text-white/80 bg-black/80 backdrop-blur-sm rounded whitespace-nowrap opacity-0 group-hover/oi:opacity-100 group-focus-within/oi:opacity-100 transition-opacity pointer-events-none">OI · ASSIST &amp; FORECAST</span>}
           <AnimatePresence>
             {showOi && (
-              <MapToolPanel width={412} title="AI assistant" onClose={() => setShowOi(false)}>
+              <MapToolPanel width={412} title="AI assistant" minimised={oiMinimised} onMinimisedChange={setOiMinimised} onClose={() => setShowOi(false)}>
                 <OiPanel draft={oiDraft} onDraftChange={setOiDraft} oi={oi} selected={oiSelected} onSelect={setOiSelected} onClose={() => { setShowOi(false); setOiTheater(false); setOiAutoFocus(false); }}
                   focus={oiFocus} onFocus={toggleOiFocus} onLocate={handleOiLocate}
                   theater={oiTheater} onTheater={setOiTheater} following={oiFollowing} onFollow={followOi}
