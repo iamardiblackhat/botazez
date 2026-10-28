@@ -1,7 +1,7 @@
-import type {Metadata} from 'next';
+import { brandedPageMetadata } from '@/lib/site-brand';
 import Link from 'next/link';
 import InfoPage from '@/components/InfoPage';
-export const metadata:Metadata={title:'Workspace guide',description:'Find places, choose map layers, review source records and use Botazez tools.',alternates:{canonical:'https://botazez.com/docs'}};
+export const metadata=brandedPageMetadata('Workspace guide','How to use the Botazez map, layers, search and investigation controls.','/docs');
 export default function Docs(){return <InfoPage title="Find your way around the world." intro="A practical guide to the Botazez map, data layers and investigation controls. The workspace opens on a world view; choose a place or event when you want to zoom in.">
 <section><h2>Start with a place</h2><p>On desktop, use the search field in the left column. On smaller screens, use “Search a place or coordinates” to open search. Find a city, address or landmark. Coordinates such as 41.9981, 21.4254 work without a geocoding request. Place suggestions use public search services and can be unavailable or incomplete.</p><p>Use the arrow keys and Enter to select a result. Recent places are saved in this browser. Shift+Enter sends a result to Directions.</p></section>
 <section><h2>Choose what the map shows</h2><p>On desktop, the left column contains the layer controls and Overview, Hazards and Transport views. These views change the visible layers; they do not establish that a source is available. Smaller layouts use a layer rail or drawer. Aviation, maritime, weather, cameras, hazards and intelligence controls remain available. Counts reflect loaded records, including static reference data; they are not a measure of live activity.</p><p>Use the map’s 2D/3D and basemap controls to change the view. The style controls adjust the workspace without changing what the data means.</p></section>

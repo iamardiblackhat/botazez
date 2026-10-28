@@ -1,23 +1,29 @@
 {
-  "name": "BOTAZEZ — Global Intelligence Platform",
-  "short_name": "BOTAZEZ",
-  "description": "Real-time global OSINT intelligence dashboard. Track 10K+ aircraft, 2K satellites, worldwide CCTV, earthquakes, wildfires, nuclear facilities, and more.",
+  "id": "/",
+  "name": "Botazez by Omnelia SI",
+  "short_name": "Botazez",
+  "description": "An intelligence dashboard by Omnelia SI for maps, public cameras, events and source-backed research.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#06060C",
   "theme_color": "#D4AF37",
-  "orientation": "landscape-primary",
-  "categories": ["security", "intelligence", "analytics", "news"],
+  "orientation": "any",
+  "categories": [
+    "productivity",
+    "utilities",
+    "news"
+  ],
   "icons": [
     {
-      "src": "/android-chrome-512x512.png",
-      "sizes": "512x512",
+      "src": "/brand/botazez-icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/brand/botazez-icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }

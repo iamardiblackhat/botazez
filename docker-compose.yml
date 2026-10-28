@@ -72,7 +72,7 @@ x-casaos:
   category: Network
   description:
     en_us: >-
-      OSIRIS is a production-grade open-source OSINT situational-awareness
+      Botazez by Omnelia SI is a public-source intelligence
       dashboard. It aggregates real-time global intelligence across aviation,
       maritime, CCTV networks, seismic activity, wildfires, news feeds,
       weather, space weather, cyber threats (CVEs) and conflict zones into a
@@ -81,11 +81,11 @@ x-casaos:
   tagline:
     en_us: Real-time global OSINT intelligence dashboard
   title:
-    en_us: OSIRIS
-  icon: https://raw.githubusercontent.com/Aiacos/osiris/master/public/casaos-icon.png
-  thumbnail: https://raw.githubusercontent.com/Aiacos/osiris/master/public/og-image.png
+    en_us: Botazez by Omnelia SI
+  icon: https://botazez.com/brand/botazez-icon-512.png
+  thumbnail: https://botazez.com/brand/botazez-social-v2.png
   screenshot_link:
-    - https://raw.githubusercontent.com/Aiacos/osiris/master/public/og-image.png
+    - https://botazez.com/brand/botazez-social-v2.png
   scheme: http
   hostname: ""
   port_map: "3000"

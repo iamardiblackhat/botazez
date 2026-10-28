@@ -1341,8 +1341,8 @@ export default function Dashboard() {
             >
               <div className="absolute inset-[-12%] rounded-full" style={{ background: 'radial-gradient(circle, rgba(0,229,255,0.18) 0%, transparent 68%)' }} />
               <motion.img
-                src="/ardi-logo.png"
-                alt="BOTAZEZ — ARDI"
+                src="/brand/botazez-mark.svg"
+                alt="Botazez by Omnelia SI"
                 className="relative w-full h-full object-contain"
                 style={{ filter: 'drop-shadow(0 0 26px rgba(0,229,255,0.28))' }}
                 animate={{ scale: [1, 1.035, 1] }}
@@ -1878,7 +1878,7 @@ export default function Dashboard() {
       {/* ── HEADER ── */}
       <motion.div data-hud initial={{ opacity: 0, y: -20 }} animate={revealed ? { opacity: 1, y: 0 } : { opacity: 0, y: -20 }} transition={hudIn(0.15)} className={`botazez-map-header absolute top-4 z-[200] pointer-events-none flex flex-col`} style={{ left: isMobile ? '24px' : '64px', right: '24px' }}>
         <div className="omnelia-brand-lockup omnelia-glass flex items-center gap-3 w-fit">
-          <img src="/ardi-logo.png" alt="BOTAZEZ — ARDI" className="w-9 h-9 md:w-11 md:h-11 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]" />
+          <img src="/brand/botazez-mark.svg" alt="Botazez by Omnelia SI" className="w-9 h-9 md:w-11 md:h-11 shrink-0 object-contain drop-shadow-[0_0_10px_rgba(0,229,255,0.45)]" />
           <div className="flex flex-col items-start gap-0.5">
             <h1 className="text-lg md:text-xl font-bold tracking-[0.4em] text-[#D4AF37] font-mono">BOTAZEZ</h1>
             <span className="botazez-tagline text-[11px] md:text-[12px] font-mono tracking-[0.2em] opacity-80 uppercase text-[#D4AF37]">GLOBAL INTELLIGENCE COMMAND</span>

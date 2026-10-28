@@ -1,1 +1,31 @@
-{"name":"BOTAZEZ — Global Intelligence Platform","short_name":"BOTAZEZ","icons":[{"src":"/android-chrome-192x192.png","sizes":"192x192","type":"image/png"},{"src":"/android-chrome-512x512.png","sizes":"512x512","type":"image/png"}],"theme_color":"#D4AF37","background_color":"#06060C","display":"standalone"}
+{
+  "id": "/",
+  "name": "Botazez by Omnelia SI",
+  "short_name": "Botazez",
+  "description": "An intelligence dashboard by Omnelia SI for maps, public cameras, events and source-backed research.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#06060C",
+  "theme_color": "#D4AF37",
+  "orientation": "any",
+  "categories": [
+    "productivity",
+    "utilities",
+    "news"
+  ],
+  "icons": [
+    {
+      "src": "/brand/botazez-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/botazez-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

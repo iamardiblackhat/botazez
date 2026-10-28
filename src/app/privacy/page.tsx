@@ -1,6 +1,6 @@
-import type {Metadata} from 'next';
+import { brandedPageMetadata } from '@/lib/site-brand';
 import InfoPage from '@/components/InfoPage';
-export const metadata:Metadata={title:'Data and privacy',description:'How the Botazez workspace uses browser storage, public data services and optional AI connections.',alternates:{canonical:'https://botazez.com/privacy'}};
+export const metadata=brandedPageMetadata('Data and privacy','How Botazez by Omnelia SI uses browser storage, public sources and optional AI connections.','/privacy');
 export default function Privacy(){return <InfoPage title="Understand where your data goes." intro="This page describes the workspace’s current technical behaviour. Features and connected services can have different processing requirements.">
 <section><h2>Public map and feed requests</h2><p>Map tiles, geocoding, camera streams, market data and other public sources can be requested through Botazez or directly from their providers. Those providers and the website host can receive connection information such as an IP address and browser headers. Their availability and policies remain separate from Botazez.</p></section>
 <section><h2>Preferences and recent work</h2><p>The browser stores settings such as your style choices, recent places and supported workspace history. This is browser-local storage, not a promise of account synchronization. Clearing site data removes local settings and history.</p></section>

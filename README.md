@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/ardi-logo.png" width="160" alt="BOTAZEZ — ARDI Logo" style="border-radius: 50%; drop-shadow: 0 0 20px rgba(0, 229, 255, 0.4);" />
+<img src="public/brand/botazez-mark.svg" width="160" alt="Botazez by Omnelia SI" style="border-radius: 50%; drop-shadow: 0 0 20px rgba(0, 229, 255, 0.4);" />
 
 # BOTAZEZ
 

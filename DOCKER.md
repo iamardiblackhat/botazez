@@ -96,10 +96,10 @@ reads.
 2. CasaOS dashboard → **`+`** → **Install a customized app** → paste the
    contents of `docker-compose.yml`.
    *(or simply run `docker compose up -d` from the cloned directory).*
-3. OSIRIS appears on the dashboard with its icon, reachable on host port
+3. Botazez appears on the dashboard with its icon, reachable on host port
    `3000` (or whatever `OSIRIS_PORT` you set in `.env`).
 
-The app icon is the gold Eye-of-Horus mark in
+The app icon is the Botazez liquid-glass monogram in
 `public/casaos-icon.png` (512×512 PNG), referenced by the `icon:` URL in the
 metadata.
 
