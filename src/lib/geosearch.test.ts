@@ -188,3 +188,8 @@ describe('searchPlaces', () => {
     await expect(pending).rejects.toThrow();
   });
 });
+
+describe('search availability',()=>{
+ it('distinguishes unavailable providers from an actual empty search',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>new Response('{}',{status:503})));await expect(searchPlaces('Skopje')).rejects.toThrow(/unavailable/i);});
+ it('preserves a healthy empty response when neither provider finds a place',async()=>{vi.stubGlobal('fetch',vi.fn(async(url:string)=>new Response(JSON.stringify(url.startsWith('https://photon')?{features:[]}:{results:[]}))));expect(await searchPlaces('no-match-fixture')).toEqual([]);});
+});

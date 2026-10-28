@@ -219,7 +219,7 @@ export default function GlobalStatusBar({ revealed = true }: { revealed?: boolea
           {/* Status indicator */}
           <div className="h-full px-3 flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-[#00E676] animate-pulse" />
-            <span className="text-[#00E676]/70 text-[9px] tracking-[0.2em]">ONLINE</span>
+            <span className="text-[#00E676]/70 text-[9px] tracking-[0.2em]">WORKSPACE</span>
           </div>
         </div>
       </div>

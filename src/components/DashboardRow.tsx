@@ -128,7 +128,7 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
             onClick={() => setCyberTab('cves')}
             className={`px-2 py-0.5 rounded text-[9px] font-mono tracking-wider transition-colors ${cyberTab === 'cves' ? 'bg-[#FF3D3D]/20 text-[#FF3D3D] border border-[#FF3D3D]/40' : 'text-white/40 hover:text-white/70'}`}
           >
-            CISA ZERO-DAYS ({cves.length})
+            KNOWN EXPLOITED ({cves.length})
           </button>
         </div>
 
@@ -161,11 +161,11 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
             >
               <div className="flex items-center justify-between gap-1">
                 <span className="text-[10.5px] text-[#FF5252] font-mono font-bold truncate">{c.id}</span>
-                <span className="text-[8px] font-mono px-1 py-0.2 bg-red-950/80 text-red-400 border border-red-500/30 rounded">CRITICAL</span>
+                <span className="text-[8px] font-mono px-1 py-0.2 bg-red-950/80 text-red-400 border border-red-500/30 rounded">KNOWN EXPLOITED</span>
               </div>
               <div className="text-[9.5px] text-[var(--text-primary)] truncate mt-0.5">{c.name || `${c.vendor} ${c.product}`}</div>
               <div className="text-[8.5px] font-mono text-[var(--text-muted)] truncate">
-                {c.vendor} {c.product} · Due: {c.due || 'ASAP'}
+                {c.vendor} {c.product} · Due: {c.due || 'Not provided'}
               </div>
             </div>
           ))

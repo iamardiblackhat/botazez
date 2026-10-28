@@ -181,7 +181,7 @@ async function getJson<T>(url: string, signal: AbortSignal | undefined, ms: numb
  * Search from the browser: Photon directly, then our server's Nominatim
  * supplement when Photon is thin or unreachable. If Photon found something but
  * not enough, `onPartial` gets it straight away, so a slow supplement never
- * holds back what is already known. Throws only when `signal` aborts.
+ * holds back what is already known. Throws when both providers are unavailable, or when `signal` aborts.
  */
 export async function searchPlaces(
   q: string,
@@ -197,5 +197,6 @@ export async function searchPlaces(
   const server = await getJson<{ results?: GeoResult[] }>(
     `/api/geosearch?q=${encodeURIComponent(q)}`, signal, SUPPLEMENT_TIMEOUT_MS,
   );
+  if (!Array.isArray(photon?.features) && !Array.isArray(server?.results)) throw new Error('Place search is temporarily unavailable.');
   return mergeResults(direct, server?.results || []);
 }

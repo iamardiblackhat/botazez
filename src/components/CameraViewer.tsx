@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { X, ExternalLink, RefreshCw, MapPin, Camera, CameraOff, Maximize2, PlayCircle } from 'lucide-react';
 import Hls from 'hls.js';
 import { isHostedOffPlatform, liveFeedAtSource, localEmbed, needsResolution, offPlatformView } from '@/lib/camera-feed';
@@ -22,19 +23,6 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
   const [error, setError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
-  const [currentTime, setCurrentTime] = useState<string>('');
-
-  useEffect(() => {
-    const iv = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(now.toISOString().split('T')[1].slice(0, 8) + 'Z');
-    }, 1000);
-    return () => clearInterval(iv);
-  }, []);
-
-  const camId = camera ? `CAM-${Math.abs(camera.lat * 10000).toFixed(0).padStart(4, '0').slice(-4)}-${Math.abs(camera.lng * 10000).toFixed(0).padStart(4, '0').slice(-4)}` : 'UNKNOWN';
-
-  
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
 
@@ -177,43 +165,32 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
     lookedAt.current = cameraId;
   }, [cameraId]);
 
-  if (!camera) return null;
+  useEffect(() => {
+    if (!camera) return;
+    const keyboard = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } };
+    document.addEventListener('keydown', keyboard);
+    return () => document.removeEventListener('keydown', keyboard);
+  }, [camera, onClose]);
 
-  return (
+  if (!camera || typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.3, type: "spring", bounce: 0 }}
-          className={`fixed z-[500] ${
-            fullscreen 
-              ? 'inset-2 md:inset-4' 
+          role="dialog" aria-label={`Camera: ${camera.name}`} className={`camera-viewer fixed z-[500] ${
+            fullscreen
+              ? 'inset-2 md:inset-4'
               : `bottom-[70px] left-2 right-2 md:bottom-6 ${besideOi ? 'md:right-[500px]' : 'md:right-6'} md:left-auto md:w-[480px]`
           }`}
         >
-          <div className="overflow-hidden h-full flex flex-col bg-black/85 backdrop-blur-xl border border-[var(--border-primary)]" style={{ boxShadow: '0 20px 50px rgba(0,0,0,0.9), inset 0 0 30px rgba(0,0,0,0.8)' }}>
-            
-            {/* Tactical Grid Overlay on background */}
-            <div className="absolute inset-0 pointer-events-none opacity-20" style={{
-              backgroundImage: 'linear-gradient(var(--border-secondary) 1px, transparent 1px), linear-gradient(90deg, var(--border-secondary) 1px, transparent 1px)',
-              backgroundSize: '20px 20px'
-            }} />
+          <div className="camera-viewer-frame omnelia-glass h-full flex flex-col">
 
             {/* Tactical Header */}
             <div className="flex flex-col border-b border-[var(--border-primary)] bg-black/60 relative z-10">
-              {/* Top Meta Bar */}
-              <div className="flex items-center justify-between px-3 py-1 border-b border-white/5 text-[9px] font-mono tracking-[0.2em] text-[var(--text-muted)] bg-[var(--hover-accent)]">
-                <div className="flex items-center gap-3">
-                  <span className="text-[var(--gold-primary)] font-bold">{camId}</span>
-                  <span>{camera.lat?.toFixed(4)}, {camera.lng?.toFixed(4)}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span>{currentTime}</span>
-                  <span className="text-[var(--gold-primary)]">SECURE UPLINK</span>
-                </div>
-              </div>
-
               {/* Main Title Bar */}
               <div className="flex items-center justify-between px-3 md:px-4 py-2 md:py-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -223,36 +200,36 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
                     <div className="absolute bottom-0 right-0 w-1 h-1 border-b border-r border-[var(--gold-primary)]" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-[11px] md:text-[12px] font-mono font-bold tracking-widest truncate text-white uppercase" style={{ textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>{camera.name}</h3>
-                    <p className="text-[9px] md:text-[9px] font-mono text-[var(--gold-primary)] uppercase tracking-wider opacity-80">{camera.city}, {camera.country} • SOURCE: {camera.source}</p>
+                    <h3 className="text-[15px] font-semibold leading-relaxed truncate text-white" style={{ textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>{camera.name}</h3>
+                    <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">{camera.city}, {camera.country} • SOURCE: {camera.source}</p>
                   </div>
                 </div>
-                
+
                 {/* Controls */}
                 <div className="flex items-center gap-1 flex-shrink-0 ml-3">
                   {streamType === 'jpg' && (
-                    <button 
+                    <button
                       onClick={() => {
                         const targetUrl = camera.feed_url || camera.stream_url;
                         if (targetUrl) {
                           const url = targetUrl.includes('?') ? `${targetUrl}&_t=${Date.now()}` : `${targetUrl}?_t=${Date.now()}`;
                           setImageUrl(url);
                         }
-                      }} 
+                      }}
                       className="p-1.5 rounded-sm bg-white/5 border border-white/10 hover:bg-[var(--gold-primary)]/20 hover:border-[var(--gold-primary)] transition-all" title="Refresh feed"
                     >
                       <RefreshCw className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--gold-primary)]" />
                     </button>
                   )}
-                  {camera.lat && camera.lng && (
-                    <button onClick={() => onLocate?.(camera.lat, camera.lng)} className="p-1.5 rounded-sm bg-white/5 border border-white/10 hover:bg-[var(--gold-primary)]/20 hover:border-[var(--gold-primary)] transition-all" title="Fly to location">
+                  {Number.isFinite(camera.lat) && Number.isFinite(camera.lng) && (
+                    <button onClick={() => onLocate?.(camera.lat, camera.lng)} className="p-1.5 rounded-sm bg-white/5 border border-white/10 hover:bg-[var(--gold-primary)]/20 hover:border-[var(--gold-primary)] transition-all" aria-label="Locate camera on map" title="Fly to location">
                       <MapPin className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--gold-primary)]" />
                     </button>
                   )}
-                  <button onClick={() => setFullscreen(!fullscreen)} className="hidden md:block p-1.5 rounded-sm bg-white/5 border border-white/10 hover:bg-[var(--text-primary)]/20 hover:border-[var(--text-primary)] transition-all" title="Toggle fullscreen">
+                  <button aria-label={fullscreen ? 'Restore camera viewer' : 'Expand camera viewer'} onClick={() => setFullscreen(!fullscreen)} className="block p-1.5 rounded-sm bg-white/5 border border-white/10 hover:bg-[var(--text-primary)]/20 hover:border-[var(--text-primary)] transition-all" title="Toggle fullscreen">
                     <Maximize2 className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" />
                   </button>
-                  <button onClick={onClose} className="p-1.5 rounded-sm bg-red-900/30 border border-red-500/30 hover:bg-red-500/30 hover:border-red-500 transition-all ml-2">
+                  <button aria-label="Close camera viewer" onClick={onClose} className="p-1.5 rounded-sm bg-red-900/30 border border-red-500/30 hover:bg-red-500/30 hover:border-red-500 transition-all ml-2">
                     <X className="w-4 h-4 md:w-3 md:h-3 text-red-400 hover:text-red-200" />
                   </button>
                 </div>
@@ -296,9 +273,9 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
                 <ExternalLink className="w-6 h-6 mb-3 opacity-50" style={{ color: 'var(--gold-primary)' }} />
                 <p className="text-[11px] font-mono uppercase tracking-widest" style={{ color: 'var(--gold-primary)' }}>SECURE FEED ENCRYPTED</p>
                 <p className="text-[9px] font-mono text-[var(--text-muted)] mt-2 max-w-[80%] uppercase">This feed requires external clearance</p>
-                <a 
-                  href={externalFeedUrl} 
-                  target="_blank" 
+                <a
+                  href={externalFeedUrl}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="mt-4 px-4 py-2 rounded text-[10px] font-mono font-bold tracking-widest transition-all hover:bg-white/10"
                   style={{ border: '1px solid var(--border-primary)', color: 'var(--gold-primary)' }}
@@ -320,7 +297,7 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
             ) : streamType === 'hls' ? (
               <video
                 ref={videoRef}
-                className={`w-full h-full ${fullscreen ? 'object-contain' : 'object-cover'}`}
+                className={`w-full h-full object-contain`}
                 autoPlay
                 muted
                 playsInline
@@ -329,14 +306,14 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
               <img
                 src={camera.stream_url}
                 alt={camera.name}
-                className={`w-full h-full ${fullscreen ? 'object-contain' : 'object-cover'}`}
+                className={`w-full h-full object-contain`}
                 onLoad={() => setLoading(false)}
                 onError={() => { setLoading(false); setError(true); }}
               />
             ) : streamType === 'mp4' && camera.stream_url ? (
               <video
                 src={camera.stream_url}
-                className={`w-full h-full ${fullscreen ? 'object-contain' : 'object-cover'}`}
+                className={`w-full h-full object-contain`}
                 autoPlay
                 muted
                 playsInline
@@ -353,21 +330,21 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
               <img
                 src={imageUrl}
                 alt={camera.name}
-                className={`w-full h-full ${fullscreen ? 'object-contain' : 'object-cover'}`}
+                className={`w-full h-full object-contain`}
                 onLoad={() => setLoading(false)}
                 onError={() => { setLoading(false); setError(true); }}
               />
             ) : null}
 
             {/* Built-in analysis: counted on the reader's device, and what OI Assist sees. */}
-            <CameraVision camera={camera} fit={fullscreen ? 'contain' : 'cover'} ready={!loading && !error && !externalOnly} />
+            <CameraVision camera={camera} fit="contain" ready={!loading && !error && !externalOnly} />
 
             {/* Live indicator */}
             {!error && !loading && !externalOnly && (
               <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/80 border border-[var(--gold-primary)]/50 px-2 py-1 shadow-[0_0_10px_rgba(0,0,0,0.8)]">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]" />
                 <span className="text-[9px] font-mono text-white tracking-[0.2em]">
-                  {watchLiveUrl ? 'SNAPSHOT' : streamType === 'jpg' ? 'LIVE SAT-LINK' : 'LIVE FEED'}
+                  {watchLiveUrl || streamType === 'jpg' ? 'SNAPSHOT' : streamType === 'mp4' ? 'VIDEO CLIP' : resolvedEmbed ? 'EMBEDDED PLAYER' : 'VIDEO STREAM'}
                 </span>
               </div>
             )}
@@ -386,13 +363,6 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
               </a>
             )}
 
-            {/* Tactical Crosshairs */}
-            <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-              <div className="w-[80%] h-[1px] bg-white/5 absolute top-1/2 -translate-y-1/2" />
-              <div className="h-[80%] w-[1px] bg-white/5 absolute left-1/2 -translate-x-1/2" />
-              <div className="w-16 h-16 border border-white/10 rounded-full" />
-              <div className="w-1 h-1 bg-[var(--gold-primary)]/50 absolute" />
-            </div>
           </div>
 
           {/* What AI Analyze found, below the picture so that it covers none of it. */}
@@ -405,14 +375,14 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
                 <div className="flex flex-col">
                   <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-widest">FEED TYPE</span>
                   <span className="text-[9px] text-white font-mono tracking-widest uppercase">
-                    {view === 'offline' ? (gone ? 'WITHDRAWN' : 'OFFLINE') : watchLiveUrl ? 'SNAPSHOT' : externalOnly ? 'EXTERNAL' : resolvedEmbed ? 'YOUTUBE LIVE' : streamType}
+                    {view === 'offline' ? (gone ? 'WITHDRAWN' : 'OFFLINE') : watchLiveUrl ? 'SNAPSHOT' : externalOnly ? 'EXTERNAL' : resolvedEmbed ? 'EMBEDDED VIDEO' : streamType}
                   </span>
                 </div>
                 <div className="flex flex-col border-l border-white/10 pl-4">
                   <span className="text-[9px] text-[var(--text-muted)] font-mono tracking-widest">STATUS</span>
                   {/* Nothing is being received locally for an external feed — don't claim otherwise. */}
                   <span className={`text-[9px] font-mono tracking-widest ${externalOnly ? 'text-[var(--gold-primary)]' : 'text-[var(--alert-green)]'}`}>
-                    {view === 'offline' ? (gone ? 'REMOVED BY SOURCE' : 'OFF AIR AT SOURCE') : watchLiveUrl ? 'LIVE VIDEO AT SOURCE' : externalOnly ? 'HOSTED OFF-PLATFORM' : 'ACTIVE / RECORDING'}
+                    {view === 'offline' ? (gone ? 'REMOVED BY SOURCE' : 'OFF AIR AT SOURCE') : watchLiveUrl ? 'LIVE VIDEO AT SOURCE' : externalOnly ? 'HOSTED OFF-PLATFORM' : loading ? 'CONNECTING' : error ? 'UNAVAILABLE' : streamType === 'jpg' ? 'SNAPSHOT LOADED' : 'PLAYER LOADED'}
                   </span>
                 </div>
               </div>
@@ -422,22 +392,18 @@ export default function CameraViewer({ camera, onClose, onLocate, besideOi = fal
                 {!gone && (camera.feed_url || camera.external_url || (streamType === 'iframe' && camera.stream_url)) && (
                   <a href={camera.external_url || camera.feed_url || (streamType === 'iframe' ? camera.stream_url : undefined)} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-[9px] font-mono text-[var(--gold-primary)] tracking-widest">
-                    <ExternalLink className="w-2.5 h-2.5" /> RAW FEED
+                    <ExternalLink className="w-2.5 h-2.5" /> Open source
                   </a>
                 )}
                 <a href={`https://www.google.com/maps/@${camera.lat},${camera.lng},17z`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 transition-colors text-[9px] font-mono text-[var(--cyan-primary)] tracking-widest">
-                  <MapPin className="w-2.5 h-2.5" /> MAP TARGET
+                  <MapPin className="w-2.5 h-2.5" /> Map location
                 </a>
               </div>
-            </div>
-            {/* Animated data stream bar */}
-            <div className="h-[2px] w-full bg-[var(--border-primary)] overflow-hidden relative">
-              <div className="absolute top-0 bottom-0 left-0 bg-[var(--gold-primary)] shadow-[0_0_8px_var(--gold-primary)] w-1/3 animate-pulse" style={{ animation: 'progress-glow-slide 2s cubic-bezier(0.4, 0, 0.2, 1) infinite' }} />
             </div>
           </div>
         </div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>, document.body
   );
 }

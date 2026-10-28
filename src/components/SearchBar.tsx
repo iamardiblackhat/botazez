@@ -30,6 +30,8 @@ interface SearchBarProps {
   onDirections?: (place: PlaceLike) => void;
   /** Inside another container (the phone drawer): no frame of its own. */
   embedded?: boolean;
+  /** Persistent dashboard search stays compact until focused. */
+  compact?: boolean;
 }
 
 /** How close to fly for each kind /api/geosearch returns. */
@@ -53,10 +55,11 @@ const parseCoords = (s: string): { lat: number; lng: number } | null => {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? { lat, lng } : null;
 };
 
-export default function SearchBar({ onLocate, center = null, onClose, onDirections, embedded = false }: SearchBarProps) {
+export default function SearchBar({ onLocate, center = null, onClose, onDirections, embedded = false, compact = false }: SearchBarProps) {
   const [value, setValue] = useState('');
   const [results, setResults] = useState<Hit[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
   // The query the current results answer, so "no results" is never shown for a search still on its way.
   const [answered, setAnswered] = useState('');
   const [selected, setSelected] = useState(0);
@@ -69,7 +72,7 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
   const boxRef = useRef<HTMLDivElement>(null);
   const listId = useId();
 
-  useEffect(() => { const t = setTimeout(() => inputRef.current?.focus(), 50); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (compact) return; const t = setTimeout(() => inputRef.current?.focus(), 50); return () => clearTimeout(t); }, [compact]);
 
   // Ctrl+F / ⌘F while open: back to the box, with what is in it selected.
   useEffect(() => {
@@ -104,6 +107,8 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
 
   const search = useCallback((q: string) => {
     setValue(q);
+    setSearchError('');
+    abortRef.current?.abort();
     setSelected(0);
     if (timerRef.current) clearTimeout(timerRef.current);
 
@@ -138,6 +143,7 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
         // An abandoned lookup is not a failure; the newer one owns the list.
         if (ctrl.signal.aborted) return;
         setResults([]);
+        setSearchError('Search services are unavailable. Retry, or enter coordinates.');
       }
       setAnswered(q);
       setLoading(false);
@@ -202,10 +208,10 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
     }
   };
 
-  const noResults = typing && !loading && answered === value && value.trim().length >= 2 && results.length === 0;
+  const noResults = !searchError && typing && !loading && answered === value && value.trim().length >= 2 && results.length === 0;
 
   return (
-    <div ref={boxRef} className={embedded ? 'flex flex-col' : 'glass-panel tool-glass relative overflow-hidden flex flex-col max-h-[min(72vh,600px)]'}>
+    <div ref={boxRef} className={embedded ? `flex flex-col ${compact ? 'dashboard-search-compact' : ''}` : 'glass-panel tool-glass relative overflow-hidden flex flex-col max-h-[min(72vh,600px)]'}>
       {!embedded && <span aria-hidden className="absolute inset-x-0 top-0 h-px z-10" style={{ background: 'linear-gradient(90deg, transparent, rgba(var(--gold-rgb),0.7) 30%, rgba(var(--gold-rgb),0.7) 70%, transparent)' }} />}
 
       {/* ── the box ── */}
@@ -216,7 +222,7 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
           value={value}
           onChange={e => search(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Search places, addresses or coordinates"
+          placeholder={embedded ? 'Place or coordinates' : 'Search places, addresses or coordinates'}
           aria-label="Search places"
           role="combobox"
           aria-expanded={items.length > 0}
@@ -281,6 +287,7 @@ export default function SearchBar({ onLocate, center = null, onClose, onDirectio
           </div>
         )}
 
+        {searchError && <div role="status" className="px-4 py-5 text-sm text-[var(--text-primary)]"><p>{searchError}</p><button type="button" onClick={() => search(value)} className="mt-3 rounded-lg border border-[var(--border-cyan)] px-3 py-2 text-[var(--cyan-primary)]">Retry search</button></div>}
         {noResults && (
           <div role="status" className="flex flex-col items-center text-center px-6 py-8">
             <span className="w-11 h-11 rounded-full flex items-center justify-center border border-[var(--border-secondary)] bg-white/[0.02]">

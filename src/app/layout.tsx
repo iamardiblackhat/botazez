@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from '@vercel/analytics/next';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import "./globals.css";
+import "./omnelia-glass.css";
 
 const SITE_URL = "https://botazez.com";
 const SITE_NAME = "BOTAZEZ";
 const SITE_TITLE = "BOTAZEZ — Open Source Intelligence Platform | Live Flight Tracking, CCTV, OSINT Tools & More";
-const SITE_DESCRIPTION = "The open-source Palantir alternative. Track 10,000+ aircraft, 2,000 satellites, and worldwide CCTV cameras in real-time on a 3D globe. Run Nmap scans, DNS lookups, WHOIS queries, SSL cert analysis & threat intelligence — all from your browser. 20+ live data feeds including earthquakes, wildfires, nuclear facilities, cyber threats, and global conflicts. Free & open source.";
+const SITE_DESCRIPTION = "Explore public-source intelligence on an interactive global map: places, aviation, maritime, cameras, weather, hazards and cyber records. Source coverage, freshness and tool availability depend on the connected services.";
 
 export const viewport: Viewport = {
   themeColor: "#D4AF37",
@@ -188,7 +189,6 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <link rel="canonical" href={SITE_URL} />
         
         {/* JSON-LD Structured Data */}
         <script
@@ -201,7 +201,7 @@ export default function RootLayout({
         <ErrorBoundary name="BOTAZEZ Core">
           {children}
         </ErrorBoundary>
-        <Analytics />
+        {process.env.VERCEL === '1' && <Analytics />}
       </body>
     </html>
   );

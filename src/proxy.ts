@@ -1,46 +1,30 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest, NextFetchEvent } from 'next/server';
 
-// Next.js 16 renamed the `middleware` file convention to `proxy`.
-// (Migrated from src/middleware.ts — function renamed middleware -> proxy.)
+/** Optional, explicitly configured page analytics. No local Docker assumption. */
 export function proxy(request: NextRequest, event: NextFetchEvent) {
-  const url = request.nextUrl.pathname;
-
-  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1';
-  const userAgent = request.headers.get('user-agent') || 'Unknown BOTAZEZ Client';
-
-  const basePayload = {
-    hostname: request.nextUrl.hostname,
-    language: "en-US",
-    referrer: request.headers.get('referer') || "",
-    screen: "1920x1080",
-    title: "BOTAZEZ",
-    url: url,
-    website: process.env.UMAMI_WEBSITE_ID || "cd8f216c-fc3f-45f5-ba1a-e10309a61d18"
-  };
-
-  const pageView = fetch('http://umami-umami-1:3000/api/send', {
+  const endpoint = process.env.UMAMI_URL;
+  const website = process.env.UMAMI_WEBSITE_ID;
+  if (!endpoint || !website) return NextResponse.next();
+  let target: URL;
+  try {
+    target = new URL('/api/send', endpoint);
+    if (!['https:', 'http:'].includes(target.protocol)) return NextResponse.next();
+  } catch { return NextResponse.next(); }
+  const pageView = fetch(target.href, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent, 'x-forwarded-for': ip },
-    body: JSON.stringify({ payload: basePayload, type: "event" })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'event', payload: {
+      hostname: request.nextUrl.hostname,
+      url: request.nextUrl.pathname,
+      title: 'BOTAZEZ',
+      website,
+    } }),
+    signal: AbortSignal.timeout(3000),
   }).catch(() => {});
-
-  const ipEvent = fetch('http://umami-umami-1:3000/api/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent, 'x-forwarded-for': ip },
-    body: JSON.stringify({
-      payload: { ...basePayload, name: "Network Log", data: { IP: ip } },
-      type: "event"
-    })
-  }).catch(() => {});
-
-  event.waitUntil(Promise.all([pageView, ipEvent]));
-
+  event.waitUntil(pageView);
   return NextResponse.next();
 }
-
 export const config = {
-  matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-}
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+};
