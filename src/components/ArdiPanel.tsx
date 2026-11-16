@@ -65,7 +65,7 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
       {/* ── Launcher chip (replaces donation chip) ── */}
       <button
         onClick={() => { setIsOpen(true); setMinimised(false); }}
-        aria-label="Open ARDI Sec"
+        title="Open ARDI Sec"
         className={`ardi-chip pointer-events-auto glass-panel flex items-center font-mono tracking-widest transition-all hover:opacity-95 ${compact ? 'gap-1.5 px-3 py-2 text-[15px]' : 'gap-2 px-5 py-2.5 text-[18px] ml-4'}`}
         style={{
           borderColor: 'rgba(20,241,149,0.65)',
@@ -73,9 +73,9 @@ export default function ArdiPanel({ compact = false }: { compact?: boolean }) {
           boxShadow: '0 0 18px rgba(20,241,149,0.35)',
         }}
       >
-        <ShieldCheck className={compact ? 'w-5 h-5' : 'w-6 h-6'} style={{ color: '#4DFFB4', filter: 'drop-shadow(0 0 6px rgba(20,241,149,0.7))' }} />
+        <ShieldCheck aria-hidden="true" className={compact ? 'w-5 h-5' : 'w-6 h-6'} style={{ color: '#4DFFB4', filter: 'drop-shadow(0 0 6px rgba(20,241,149,0.7))' }} />
         <span className="font-extrabold tracking-[0.24em]" style={{ color: '#5CFFBE', textShadow: '0 0 14px rgba(20,241,149,0.8)' }}>ARDI</span>
-        {!compact && <span className="hidden md:inline text-[12px] text-[var(--text-secondary)] font-semibold tracking-[0.24em]">SEC</span>}
+        {!compact && <span className="hidden md:inline text-[12px] text-[var(--text-secondary)] font-semibold tracking-[0.24em]">{' '}SEC</span>}
       </button>
 
       {typeof document !== 'undefined' && createPortal(<AnimatePresence>

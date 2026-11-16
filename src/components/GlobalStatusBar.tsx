@@ -152,12 +152,16 @@ export default function GlobalStatusBar({ revealed = true }: { revealed?: boolea
         <div className="flex-shrink-0 h-full flex items-center pointer-events-auto">
           {/* Discord — highlighted */}
           <a href="https://discord.gg/EPaFD5FFKf" target="_blank" rel="noopener noreferrer"
+            aria-label="Join Discord community"
+            title="Join Discord community"
             className="h-full px-3 flex items-center gap-1.5 bg-[#5865F2]/10 hover:bg-[#5865F2]/25 border-r border-white/[0.04] transition-all duration-200 group"
           >
             <DiscordIcon />
           </a>
           {/* X / Twitter */}
           <a href="https://x.com/soulsimplifai" target="_blank" rel="noopener noreferrer"
+            aria-label="Follow on X"
+            title="Follow on X"
             className="h-full px-2.5 flex items-center gap-1.5 text-white/40 hover:text-white hover:bg-white/[0.04] border-r border-white/[0.04] transition-all duration-200"
           >
             <XIcon />

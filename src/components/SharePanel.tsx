@@ -71,6 +71,7 @@ export default function SharePanel({ mapView, activeLayers, mouseCoords }: Share
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         className="glass-panel w-8 h-8 flex items-center justify-center pointer-events-auto hover:border-[var(--gold-primary)] transition-colors"
+        aria-label="Share view"
         title="Share view (S)"
       >
         <Share2 className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
