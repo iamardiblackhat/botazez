@@ -113,6 +113,7 @@ export default function IntelFeed({ data, onLocate }: IntelFeedProps) {
                             e.stopPropagation();
                             onLocate?.(item.coords[0], item.coords[1]);
                           }}
+                          aria-label="Locate on map"
                           className="text-[var(--text-muted)] hover:text-[var(--cyan-primary)] transition-colors"
                           title={item.coords_anchor ? `Approximate: centroid for "${item.coords_anchor}", not the event location` : 'Approximate location'}
                         >

@@ -167,14 +167,14 @@ export default function GlobalStatusBar({ revealed = true }: { revealed?: boolea
             <XIcon />
           </a>
           {/* Documentation & API reference */}
-          <Link href="/docs" prefetch title="Documentation & API Reference" aria-label="Documentation & API Reference"
+          <Link href="/docs" prefetch title="Documentation & API Reference" aria-label="Docs — Documentation & API Reference"
             className="h-full px-3 flex items-center gap-1.5 bg-[var(--gold-primary)]/10 text-[var(--gold-primary)]/80 hover:text-[var(--gold-primary)] hover:bg-[var(--gold-primary)]/25 border-r border-white/[0.04] transition-all duration-200"
           >
             <DocsIcon />
             <span className="text-[9px] font-bold tracking-[0.15em] uppercase">Docs</span>
           </Link>
           {/* Data & privacy — what leaves this instance, and when */}
-          <Link href="/privacy" title="Data & Privacy" aria-label="Data and Privacy"
+          <Link href="/privacy" title="Data & Privacy" aria-label="Privacy — Data and Privacy"
             className="h-full px-3 hidden sm:flex items-center text-white/40 hover:text-white hover:bg-white/[0.04] border-r border-white/[0.04] transition-all duration-200"
           >
             <span className="text-[9px] font-bold tracking-[0.15em] uppercase">Privacy</span>

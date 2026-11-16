@@ -91,7 +91,7 @@ export default function SharePanel({ mapView, activeLayers, mouseCoords }: Share
                 <Globe className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
                 <span className="hud-text text-[11px] text-[var(--text-primary)]">SHARE VIEW</span>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+              <button onClick={() => setIsOpen(false)} aria-label="Close share panel" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                 <X className="w-3 h-3" />
               </button>
             </div>

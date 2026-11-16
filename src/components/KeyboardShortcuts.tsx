@@ -49,7 +49,7 @@ export default function KeyboardShortcuts() {
                 <Keyboard className="w-4 h-4 text-[var(--gold-primary)]" />
                 <span className="text-sm font-mono font-bold text-[var(--text-heading)] tracking-wider">SHORTCUTS</span>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+              <button onClick={() => setIsOpen(false)} aria-label="Close shortcuts" className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
                 <X className="w-4 h-4" />
               </button>
             </div>

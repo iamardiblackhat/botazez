@@ -105,6 +105,7 @@ export default function SpaceCam() {
         </span>
         <button
           onClick={() => setExpanded(true)}
+          aria-label="Expand space video"
           title="Expand — a bigger player is what makes YouTube serve HD"
           className="ml-1 p-1 rounded hover:bg-[var(--hover-accent)] text-[var(--text-muted)] hover:text-[#00E5FF] transition-colors"
         >
@@ -187,6 +188,7 @@ export default function SpaceCam() {
               </span>
               <button
                 onClick={() => setExpanded(false)}
+                aria-label="Close expanded space video"
                 title="Close (Esc)"
                 className="p-1.5 rounded hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition-colors"
               >

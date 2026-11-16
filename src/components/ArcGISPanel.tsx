@@ -284,6 +284,7 @@ export default function ArcGISPanel({
                       <button
                         onClick={() => setExpandedLayerId(isExpanded ? null : layer.id)}
                         className="flex-shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors text-white/40 hover:text-white/70"
+                        aria-label="Layer settings"
                         title="Layer settings"
                       >
                         <SlidersHorizontal className="w-3 h-3" />
@@ -301,6 +302,7 @@ export default function ArcGISPanel({
                           if (isExpanded) setExpandedLayerId(null);
                         }}
                         className="flex-shrink-0 p-0.5 rounded text-red-400/40 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                        aria-label="Remove layer"
                         title="Remove Layer"
                       >
                         <X className="w-3 h-3" />
@@ -428,7 +430,7 @@ export default function ArcGISPanel({
           >
             <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
             <span className="truncate flex-1">{error}</span>
-            <button onClick={() => setError('')} className="p-1 rounded hover:bg-red-500/20 opacity-80 hover:opacity-100">
+            <button onClick={() => setError('')} aria-label="Dismiss error" className="p-1 rounded hover:bg-red-500/20 opacity-80 hover:opacity-100">
               <X className="w-3 h-3" />
             </button>
           </motion.div>

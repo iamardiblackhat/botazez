@@ -461,6 +461,7 @@ export default function AiAnalyst({ data }: AiAnalystProps) {
                     <button
                       onClick={clearMessages}
                       className="p-1.5 rounded-lg hover:bg-[var(--hover-accent)] transition-colors group"
+                      aria-label="Clear conversation"
                       title="Clear conversation"
                     >
                       <Trash2 className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--alert-red)]" />
@@ -469,6 +470,7 @@ export default function AiAnalyst({ data }: AiAnalystProps) {
                   <button
                     onClick={() => setShowSettings(!showSettings)}
                     className="p-1.5 rounded-lg hover:bg-[var(--hover-accent)] transition-colors group"
+                    aria-label="Settings"
                     title="Settings"
                   >
                     <Settings
@@ -480,6 +482,7 @@ export default function AiAnalyst({ data }: AiAnalystProps) {
                   <button
                     onClick={() => setIsOpen(false)}
                     className="p-1.5 rounded-lg hover:bg-[var(--hover-accent)] transition-colors group"
+                    aria-label="Close"
                     title="Close"
                   >
                     <X className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]" />
@@ -536,6 +539,7 @@ export default function AiAnalyst({ data }: AiAnalystProps) {
                             </button>
                             <button
                               onClick={clearApiKey}
+                              aria-label="Clear API key"
                               className="px-2 rounded-lg text-[12px] font-mono tracking-wider transition-all hover:bg-red-500/10"
                               style={{
                                 border: '1px solid rgba(255, 61, 61, 0.2)',
@@ -800,6 +804,7 @@ export default function AiAnalyst({ data }: AiAnalystProps) {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleSend}
+                    aria-label="Send message"
                     disabled={!inputText.trim() || isLoading}
                     className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all disabled:opacity-30"
                     style={{

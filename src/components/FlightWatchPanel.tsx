@@ -196,6 +196,7 @@ function Row({ flight, telem, onRemove, onLocate, onDetail }: {
         {telem && (
           <button
             onClick={() => onLocate(telem.lat, telem.lng)}
+            aria-label="Centre on this aircraft"
             title="Centre on this aircraft"
             className="p-0.5 text-[var(--text-muted)] hover:text-[var(--cyan-primary)] transition-colors"
           >

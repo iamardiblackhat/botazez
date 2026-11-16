@@ -1910,7 +1910,7 @@ export default function Dashboard() {
             <OmneliaBrand />
           </div>
         </div>
-        {!showDesktopSearch && mobilePanel !== 'search' && <button type="button" data-search-toggle className="omnelia-search-launch omnelia-glass" aria-label="Search a place or coordinates" onClick={() => { if (isMobile) setMobilePanel('search'); else setShowDesktopSearch(true); }}><Search aria-hidden="true"/><span>Search a place or coordinates</span><kbd aria-hidden="true">⌘/Ctrl F</kbd></button>}
+        {!showDesktopSearch && mobilePanel !== 'search' && <button type="button" data-search-toggle className="omnelia-search-launch omnelia-glass" onClick={() => { if (isMobile) setMobilePanel('search'); else setShowDesktopSearch(true); }}><Search aria-hidden="true"/><span>Search a place or coordinates</span><kbd aria-hidden="true">⌘/Ctrl F</kbd></button>}
       </motion.div>
 
 
@@ -2002,7 +2002,7 @@ export default function Dashboard() {
                     <span>Open in YouTube</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
-                  <button onClick={() => setLiveFeedUrl(null)} className="text-white/70 hover:text-white transition-colors p-1">
+                  <button onClick={() => setLiveFeedUrl(null)} aria-label="Close live stream" className="text-white/70 hover:text-white transition-colors p-1">
                     <X className="w-5 h-5" />
                   </button>
                 </div>

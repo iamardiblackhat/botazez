@@ -61,7 +61,7 @@ export default function DashboardRow({ data, onLocate, onWatchFeed, onSelectCame
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-1 rounded">{item.source}</span>
               {item.coords && (
-                <button onClick={(e) => { e.stopPropagation(); onLocate(item.coords[0], item.coords[1]); }} title="Locate on map" className="text-[var(--text-muted)] hover:text-[var(--cyan-primary)] ml-auto">
+                <button onClick={(e) => { e.stopPropagation(); onLocate(item.coords[0], item.coords[1]); }} aria-label="Locate on map" title="Locate on map" className="text-[var(--text-muted)] hover:text-[var(--cyan-primary)] ml-auto">
                   <MapPin className="w-2.5 h-2.5" />
                 </button>
               )}

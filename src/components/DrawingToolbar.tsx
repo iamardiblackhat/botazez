@@ -322,6 +322,7 @@ export default function DrawingToolbar({
                       {onToggleWatch && polygon.geojson.geometry.type === 'Polygon' && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onToggleWatch(polygon.id); }}
+                          aria-label={watched?.has(polygon.id) ? 'Stop watching this area' : 'Watch for arrivals and departures'}
                           title={watched?.has(polygon.id) ? 'Stop watching this area' : 'Watch for arrivals and departures'}
                           className={`p-1.5 rounded transition ${
                             watched?.has(polygon.id)
@@ -332,10 +333,10 @@ export default function DrawingToolbar({
                           <Radar className={`w-3 h-3 ${watched?.has(polygon.id) ? 'animate-pulse' : ''}`} />
                         </button>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); handleCopy(polygon); }} className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition" title="Copy GeoJSON">
+                      <button onClick={(e) => { e.stopPropagation(); handleCopy(polygon); }} aria-label="Copy GeoJSON" className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition" title="Copy GeoJSON">
                         {copied === polygon.id ? <Check className="w-3 h-3 text-[var(--alert-green)]" /> : <Copy className="w-3 h-3" />}
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); onDeletePolygon(polygon.id); }} className="p-1.5 rounded bg-[#FF3D57]/10 hover:bg-[#FF3D57]/20 text-[#FF3D57]/60 hover:text-[#FF3D57] transition" title="Delete">
+                      <button onClick={(e) => { e.stopPropagation(); onDeletePolygon(polygon.id); }} aria-label="Delete polygon" className="p-1.5 rounded bg-[#FF3D57]/10 hover:bg-[#FF3D57]/20 text-[#FF3D57]/60 hover:text-[#FF3D57] transition" title="Delete">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>

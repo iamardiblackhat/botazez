@@ -43,6 +43,7 @@ export default function TokenPanel() {
                 </div>
                 <button 
                   onClick={() => setIsOpen(false)}
+                  aria-label="Close token chart"
                   className="p-1 hover:bg-white/10 rounded transition-colors"
                 >
                   <X className="w-4 h-4 text-[var(--text-muted)] hover:text-white" />
