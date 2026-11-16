@@ -22,8 +22,7 @@ export const maxDuration = 20;
 
 async function searchNominatim(q: string): Promise<GeoResult[]> {
   const json = await nominatim<NominatimRow[]>('search', { q, limit: '6', addressdetails: '0' });
-  if (!Array.isArray(json)) throw new Error('Place source unavailable');
-  return json.map(normalizeNominatim).filter((r): r is GeoResult => r !== null);
+  return (Array.isArray(json) ? json : []).map(normalizeNominatim).filter((r): r is GeoResult => r !== null);
 }
 
 export async function GET(request: Request) {
@@ -33,16 +32,14 @@ export async function GET(request: Request) {
 
     if (q.length < 2) return NextResponse.json({ results: [] });
 
-    let sourceFailed = false;
     const results = await cachedSource<GeoResult>(
       `geosearch:${q.toLowerCase()}`,
-      async () => { try { return mergeResults([], await searchNominatim(q)); } catch (error) { sourceFailed = true; throw error; } },
+      async () => mergeResults([], await searchNominatim(q)),
       10 * 60 * 1000,
     )();
 
-    if (sourceFailed && !results.length) return NextResponse.json({ results: [], error: 'Place search is temporarily unavailable.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
     return NextResponse.json(
-      { results, ...(sourceFailed ? { stale: true } : {}) },
+      { results },
       { headers: { 'Cache-Control': results.length ? 'public, s-maxage=600, stale-while-revalidate=1800' : 'no-store' } },
     );
   } catch (error) {

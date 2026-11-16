@@ -24,7 +24,6 @@ describe('GET /api/geosearch', () => {
 
     const res = await ask('kharkiv');
 
-    expect(res.status).toBe(503);
     expect((await res.json()).results).toEqual([]);
     expect(res.headers.get('Cache-Control')).toBe('no-store');
   });

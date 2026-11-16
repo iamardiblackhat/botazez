@@ -251,15 +251,11 @@ export interface AssistViewProps {
   onSpeak: (on: boolean) => void;
   /** Focus the composer on mount (opened from the keyboard). */
   autoFocus?: boolean;
-  draft?: string;
-  onDraftChange?: (value: string) => void;
 }
 
 export function AssistView(p: AssistViewProps) {
   const { assist } = p;
-  const [localText, setLocalText] = useState('');
-  const text = p.draft ?? localText;
-  const setText = p.onDraftChange ?? setLocalText;
+  const [text, setText] = useState('');
   const [mode, setMode] = useState<Mode>('auto');
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
