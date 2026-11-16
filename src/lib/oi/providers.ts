@@ -91,7 +91,7 @@ const DEFS: ProviderDef[] = ([
     keyUrl: '', keyHint: 'no key needed', defaultModel: 'scripted', suggested: ['scripted'], concurrency: 4,
   },
 ] as Omit<ProviderDef, 'needsKey'>[])
-  .filter(d => d.id !== 'demo' || process.env.NODE_ENV !== 'production')
+  .filter(d => d.id !== 'demo' || process.env.NODE_ENV === 'test')
   .map(d => ({ ...d, needsKey: d.id !== 'demo' }));
 
 const BY_ID = new Map(DEFS.map(d => [d.id, d]));

@@ -277,13 +277,6 @@ export async function GET() {
       }
     }
 
-    // Emergency Fallback if cache is totally empty
-    if (allSats.length === 0) {
-      const issFallback = "1 25544U 98067A   24146.40251785  .00015505  00000-0  27885-3 0  9997\n2 25544  51.6402 189.7042 0004381 334.8091 106.8778 15.50091157455243";
-      allSats = [{ name: 'ISS (FALLBACK)', line1: issFallback.split('\n')[0], line2: issFallback.split('\n')[1] }];
-      source = 'emergency-fallback';
-    }
-
     // No artificial cap — propagate all satellites, MapLibre handles it fine
     const satellites = [];
     for (const sat of allSats) {

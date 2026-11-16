@@ -207,7 +207,7 @@ export async function identifyVehicles(camera: VisionCamera): Promise<void> {
   if (!picked.length) return fail('No vehicle in view is large enough to identify');
   const engine = loadEngine();
   const key = engine ? loadKey(engine.provider) : '';
-  if (!engine || (engine.provider !== 'demo' && !key)) return fail('Add your AI key in OI to name makes and models');
+  if (!engine || ((engine.provider !== 'demo' || process.env.NODE_ENV !== 'test') && !key)) return fail('Add your AI key in OI to name makes and models');
   set(id, { ...current, identify: { status: 'working', byIndex: {} } });
   try {
     const crops = await cropsOf(frame, picked.map(i => a.detections[i].box), a);
