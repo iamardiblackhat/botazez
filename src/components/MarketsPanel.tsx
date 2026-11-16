@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, type ComponentType, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useCallback, useContext, type ComponentType, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { PanelWindowContext } from './PanelControls';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import {
@@ -212,6 +213,7 @@ function SecurityTable({ groups, selected, watchlist, sort, onSort, onOpen, onSt
 }
 
 export default function MarketsPanel({ data, spaceWeather }: MarketsPanelProps) {
+  const panelWindow = useContext(PanelWindowContext);
   const [expanded, setExpanded] = useState(true);
   const [maximized, setMaximized] = useState(false);
   /** Starred symbols, kept in this browser only. */
@@ -634,6 +636,8 @@ export default function MarketsPanel({ data, spaceWeather }: MarketsPanelProps) 
             <div className="flex items-center gap-4 shrink-0">
               {clocks}
               {feedStatus}
+              <button aria-label="Minimise Markets" title="Minimise to see the map" onClick={() => { setMaximized(false); panelWindow.minimise(); }} className="w-10 h-10 text-xl">−</button>
+              <button aria-label="Close Markets" title="Close panel" onClick={() => panelWindow.close()} className="w-10 h-10 text-xl">×</button>
               <button onClick={toggleMax} className="p-2 hover:bg-white/5 rounded transition-colors text-[var(--text-muted)] hover:text-white" title="Exit full screen (Esc)" aria-label="Restore">
                 <Minimize2 className="w-5 h-5" />
               </button>
