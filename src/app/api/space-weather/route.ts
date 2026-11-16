@@ -122,6 +122,7 @@ export async function GET() {
 
     return NextResponse.json({
       kp_index: kpIndex,
+      kp_available: kpTimestamp !== '',
       storm_level: stormLevel,
       storm_color: stormColor,
       kp_timestamp: kpTimestamp,

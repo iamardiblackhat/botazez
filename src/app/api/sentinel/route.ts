@@ -27,13 +27,13 @@ export async function GET(req: Request) {
       const res = await fetch('https://earth-search.aws.element84.com/v1/search', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(20000),
         body: JSON.stringify({
           collections: ['sentinel-1-grd'],
           bbox,
           datetime,
           limit: 20,
-          sortby: [{ field: 'datetime', direction: 'desc' }],
+          sortby: [{ field: 'properties.datetime', direction: 'desc' }],
         }),
       });
       if (res.ok) {
@@ -56,7 +56,7 @@ export async function GET(req: Request) {
             bbox,
             datetime,
             limit: 20,
-            sortby: [{ field: 'datetime', direction: 'desc' }],
+            sortby: [{ field: 'properties.datetime', direction: 'desc' }],
           }),
         });
         if (res.ok) {

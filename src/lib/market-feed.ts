@@ -25,8 +25,6 @@ export function normalizeMarketQuotes(body: unknown): MarketQuote[] {
 }
 
 export async function getQuotes(): Promise<MarketQuote[]> {
-  const { GET } = await import('@/app/api/markets/route');
-  const response = await GET();
-  if (!response.ok) throw new Error('The market feed is unavailable.');
-  return normalizeMarketQuotes(await response.json());
+  const { getQuotes: getCachedQuotes } = await import('@/app/api/markets/handler');
+  return getCachedQuotes();
 }

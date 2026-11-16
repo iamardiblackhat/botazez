@@ -1,46 +1,57 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest, NextFetchEvent } from 'next/server';
+import type { NextRequest } from 'next/server';
 
-// Next.js 16 renamed the `middleware` file convention to `proxy`.
-// (Migrated from src/middleware.ts — function renamed middleware -> proxy.)
-export function proxy(request: NextRequest, event: NextFetchEvent) {
-  const url = request.nextUrl.pathname;
+const UMAMI_URL = 'http://umami-umami-1:3000/api/send';
+const UMAMI_OSIRIS_ID = '2b2ceca2-ac9b-4239-9996-f3c2d81aa4cd';
+const UMAMI_ROLLUP_ID = 'a3be2de8-d559-4138-91c7-2b5c86fe7250';
 
-  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || '127.0.0.1';
-  const userAgent = request.headers.get('user-agent') || 'Unknown BOTAZEZ Client';
+export function proxy(request: NextRequest) {
+  const response = NextResponse.next();
 
-  const basePayload = {
-    hostname: request.nextUrl.hostname,
-    language: "en-US",
-    referrer: request.headers.get('referer') || "",
-    screen: "1920x1080",
-    title: "BOTAZEZ",
-    url: url,
-    website: process.env.UMAMI_WEBSITE_ID || "cd8f216c-fc3f-45f5-ba1a-e10309a61d18"
+  const { pathname } = request.nextUrl;
+  const ua = request.headers.get('user-agent') || '';
+  const ip = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || '';
+  const referer = request.headers.get('referer') || '';
+  const acceptLang = request.headers.get('accept-language')?.split(',')[0] || 'en-US';
+  const host = request.headers.get('host') || 'botazez.com';
+
+  // Skip bots and asset requests
+  if (/bot|crawl|spider|slurp|WhatsApp|Telegram|curl|wget|HeadlessChrome/i.test(ua)) {
+    return response;
+  }
+
+  // Fire-and-forget to both site tracker and global rollup
+  const sendHit = (websiteId: string) => {
+    fetch(UMAMI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': ua,
+        'X-Forwarded-For': ip,
+      },
+      body: JSON.stringify({
+        type: 'event',
+        payload: {
+          website: websiteId,
+          hostname: host,
+          url: pathname,
+          referrer: referer,
+          language: acceptLang,
+          screen: '1920x1080',
+        },
+      }),
+      signal: AbortSignal.timeout(2000),
+    }).catch(() => {});
   };
 
-  const pageView = fetch('http://umami-umami-1:3000/api/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent, 'x-forwarded-for': ip },
-    body: JSON.stringify({ payload: basePayload, type: "event" })
-  }).catch(() => {});
+  sendHit(UMAMI_OSIRIS_ID);
+  sendHit(UMAMI_ROLLUP_ID);
 
-  const ipEvent = fetch('http://umami-umami-1:3000/api/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'User-Agent': userAgent, 'x-forwarded-for': ip },
-    body: JSON.stringify({
-      payload: { ...basePayload, name: "Network Log", data: { IP: ip } },
-      type: "event"
-    })
-  }).catch(() => {});
-
-  event.waitUntil(Promise.all([pageView, ipEvent]));
-
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api|vendor|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mjs|js|css|json|pbf|mvt|woff|woff2|ico|txt)$).*)',
   ],
-}
+};
