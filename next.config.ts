@@ -65,7 +65,7 @@ const nextConfig: NextConfig = {
               "media-src 'self' blob: https: http:",
               "connect-src 'self' https: wss: ws: http:",
               "worker-src 'self' blob:",
-              "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.twitch.tv https://www.tiktok.com https:// Embed.windy.com https://*.windy.com https:",
+              "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.twitch.tv https://www.tiktok.com https://embed.windy.com https://*.windy.com https:",
             ].join('; '),
           },
         ],

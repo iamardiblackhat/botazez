@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url');
@@ -15,15 +17,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden domain' }, { status: 403 });
     }
 
-    const response = await fetch(targetUrl.toString(), { signal: AbortSignal.timeout(15000),
+    // Serve local dark-matter-style.json directly when requested
+    if (targetUrl.pathname.endsWith('/dark-matter-gl-style/style.json')) {
+      const localStyle = await readFile(path.join(process.cwd(), 'public', 'dark-matter-style.json'));
+      return new NextResponse(new Uint8Array(localStyle), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
+    const response = await fetch(targetUrl.toString(), {
+      signal: AbortSignal.timeout(15000),
       headers: {
         'Accept': '*/*',
-        'User-Agent': 'Osiris-Tile-Proxy/1.0',
+        'User-Agent': request.headers.get('user-agent') || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Origin': 'https://botazez.com',
+        'Referer': 'https://botazez.com/',
       },
-      // Using Next.js fetch cache options to heavily cache tiles locally
       next: {
-        revalidate: 31536000, // Cache for 1 year
-      }
+        revalidate: 31536000,
+      },
     });
 
     if (!response.ok) {
@@ -31,8 +48,6 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.arrayBuffer();
-    
-    // Forward the content-type from the upstream response
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
 
     return new NextResponse(data, {
@@ -43,7 +58,6 @@ export async function GET(request: NextRequest) {
         'Access-Control-Allow-Origin': '*',
       },
     });
-
   } catch (error) {
     console.error('Tile proxy error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
