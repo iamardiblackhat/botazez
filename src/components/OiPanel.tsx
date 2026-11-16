@@ -19,8 +19,9 @@
  * violet in Ghost. The run itself lives in the page (useOi), so closing this
  * panel leaves the globe drawing.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useContext } from 'react';
 import { createPortal } from 'react-dom';
+import { PanelWindowContext } from './PanelControls';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowRight, History, Maximize2, Plus, X } from 'lucide-react';
 import { PROVIDERS, providerInfo } from '@/lib/oi/providers';
@@ -38,6 +39,8 @@ import { ObjectView } from './oi/ObjectView';
 import { Workspace, type Stage } from './oi/Workspace';
 
 export interface OiPanelProps {
+  draft?: string;
+  onDraftChange?: (value: string) => void;
   oi: OiClient;
   /** What is selected: a node key, or "link:<id>" for an arc. */
   selected: string | null;
@@ -80,6 +83,10 @@ function initialEngine(): Engine {
 }
 
 export default function OiPanel(props: OiPanelProps) {
+  const panelWindow = useContext(PanelWindowContext);
+  const [localDraft, setLocalDraft] = useState('');
+  const draft = props.draft ?? localDraft;
+  const setDraft = props.onDraftChange ?? setLocalDraft;
   const { oi, selected, onSelect, embedded = false, theater = false } = props;
   // Settings come from this browser's storage. The panel only renders once opened, on the client.
   const [engine, setEngine] = useState<Engine>(initialEngine);
@@ -121,7 +128,7 @@ export default function OiPanel(props: OiPanelProps) {
   ) : null;
 
   const assistView = (
-    <AssistView assist={props.assist} oi={oi} ready={ready} providerName={info.name} onKey={() => setEngineOpen(true)}
+    <AssistView draft={draft} onDraftChange={setDraft} assist={props.assist} oi={oi} ready={ready} providerName={info.name} onKey={() => setEngineOpen(true)}
       onSend={(text, m) => void props.assist.send(text, m, { engine, key })}
       onLocate={props.onLocate} onOpenForecast={() => props.onMode('forecast')}
       onWorkspace={!embedded && !theater && props.onTheater ? () => props.onTheater?.(true) : undefined}
@@ -160,7 +167,7 @@ export default function OiPanel(props: OiPanelProps) {
     );
     const node = (
       <Workspace s={s} oi={oi} selected={selected} onSelect={onSelect} onLocate={props.onLocate} onAsk={askActor}
-        onTheater={props.onTheater} focus={props.focus} onFocus={props.onFocus} following={props.following} onFollow={props.onFollow}
+        onMinimise={() => { props.onTheater?.(false); panelWindow.minimise(); }} onClose={() => { props.onTheater?.(false); props.onClose?.(); }} onTheater={props.onTheater} focus={props.focus} onFocus={props.onFocus} following={props.following} onFollow={props.onFollow}
         mode={props.mode} onMode={props.onMode} stage={props.stage} onStage={props.onStage}
         lists={tabs} errorBox={errorBox} assistView={assistView} askView={askView} engineMenu={engineMenu}
         onNewForecast={reset} assistBusy={props.assist.busy} />

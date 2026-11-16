@@ -1,17 +1,6 @@
-# Osiris Global Intelligence Platform
-# https://botazez.com
-
+# Botazez by Omnelia SI
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /api/scanner
-Disallow: /api/osint/*
 
-# Allow search engines to index the main page
-Allow: /api/health
-
-# Sitemap
 Sitemap: https://botazez.com/sitemap.xml
-
-# Crawl-delay for respectful indexing
-Crawl-delay: 10

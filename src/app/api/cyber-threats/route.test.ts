@@ -1,0 +1,13 @@
+import {afterEach,describe,it,expect,vi} from 'vitest';
+const entry=(id='CVE-2026-12345',date='2026-10-20')=>({cveID:id,dateAdded:date,vendorProject:'Fixture vendor',product:'Fixture product',vulnerabilityName:'Fixture vulnerability',shortDescription:'Source-backed description',dueDate:'2026-11-10'});
+async function get(payload:unknown,ok=true){vi.stubGlobal('fetch',vi.fn(async()=>({ok,status:ok?200:503,json:async()=>payload})));const {GET}=await import('./route');return GET();}
+afterEach(()=>vi.unstubAllGlobals());
+describe('CISA catalogue truthfulness',()=>{
+ it('does not invent a severity or global threat level from a catalogue entry',async()=>{const response=await get({vulnerabilities:[entry()]});const data=await response.json();expect(data.connected).toBe(true);expect(data.threats[0].severity).toBeNull();expect(data.stats.threat_level).toBeNull();expect(data.threats[0]).toMatchObject({id:'CVE-2026-12345',vendor:'Fixture vendor',product:'Fixture product',source:'CISA KEV'});});
+ it('returns unavailable status when the source rejects the request',async()=>{const response=await get({},false);expect(response.status).toBe(502);expect((await response.json()).connected).toBe(false);});
+ it('rejects malformed catalogues instead of reporting clean zero results',async()=>{expect((await get({unexpected:[]})).status).toBe(502);expect((await get({vulnerabilities:[entry('not-a-cve')]})).status).toBe(502);});
+ it('deduplicates and sorts recent entries by source date, independent of catalogue order',async()=>{const response=await get({vulnerabilities:[entry('CVE-2026-10001','2026-10-18'),entry('CVE-2026-10002','2026-10-22'),entry('CVE-2026-10001','2026-10-18')]});const d=await response.json();expect(d.threats.map((v:{id:string})=>v.id)).toEqual(['CVE-2026-10002','CVE-2026-10001']);});
+ it('discards invalid calendar and future dates',async()=>{const response=await get({vulnerabilities:[entry(),entry('CVE-2026-10002','2026-02-30'),entry('CVE-2026-10003','2099-01-01')]});expect((await response.json()).threats).toHaveLength(1);});
+ it('bounds the response and distinguishes a valid empty source',async()=>{const response=await get({vulnerabilities:Array.from({length:40},(_,i)=>entry(`CVE-2026-${10000+i}`))});expect((await response.json()).threats).toHaveLength(25);const empty=await get({vulnerabilities:[]});expect(empty.status).toBe(200);expect((await empty.json()).connected).toBe(true);});
+ it('does not expose internal exception diagnostics',async()=>{vi.stubGlobal('fetch',vi.fn(async()=>{throw Error('private upstream diagnostic');}));const {GET}=await import('./route');const response=await GET();expect(response.status).toBe(502);expect(JSON.stringify(await response.json())).not.toContain('private upstream diagnostic');});
+});

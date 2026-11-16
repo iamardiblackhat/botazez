@@ -142,7 +142,7 @@ export function EngineSheet({ engine, setEngine, keyValue, setKey, onDone }: {
 
       {info.needsKey && (
         <p className="text-[10.5px] leading-relaxed text-[var(--text-muted)]">
-          Your key stays in this browser{engine.remember ? '' : ' tab'} and reaches OSIRIS only inside your requests, which pass it to {info.name} for your run. It is never stored on the server or logged. A prediction makes about 30 to 130 model calls, by depth, billed to your {info.name} account.
+          Your key stays in this browser{engine.remember ? '' : ' tab'} and reaches Botazez only inside your requests, which pass it to {info.name} for your run. It is never stored on the server or logged. A prediction makes about 30 to 130 model calls, by depth, billed to your {info.name} account.
         </p>
       )}
     </section>

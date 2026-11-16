@@ -451,7 +451,7 @@ export default function AiAnalyst({ data }: AiAnalystProps) {
                   <div className="flex flex-col">
                     <span className="hud-text text-[11px] text-[var(--text-heading)]">BOTAZEZ ANALYST</span>
                     <span className="text-[10px] font-mono tracking-[0.2em] text-[var(--text-muted)]">
-                      GEMINI 2.0 FLASH • ONLINE
+                      AI ANALYSIS · VERIFY SOURCES
                     </span>
                   </div>
                 </div>
